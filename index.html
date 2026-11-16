@@ -67,7 +67,7 @@ video, #overlay { position: absolute; inset: 0; width: 100%; height: 100%; objec
 .side.r { align-items: flex-end; text-align: right; }
 .big { font-weight: 800; font-size: 26px; font-variant-numeric: tabular-nums; line-height: 1; }
 .lbl { font: 500 10px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ink); opacity: .8; }
-.ghost { background: var(--glass); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); padding: 8px 12px; border-radius: 999px; font-size: 13px; font-weight: 700; margin-top: 6px; }
+.ghost { touch-action: manipulation; min-height: 40px; background: var(--glass); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); padding: 8px 12px; border-radius: 999px; font-size: 13px; font-weight: 700; margin-top: 6px; }
 
 /* ---------- ecran de fin ---------- */
 #done { position: fixed; inset: 0; overflow-y: auto; background: var(--bg); padding: calc(env(safe-area-inset-top,0px) + 24px) max(20px, env(safe-area-inset-right,0px)) calc(env(safe-area-inset-bottom,0px) + 24px) max(20px, env(safe-area-inset-left,0px)); }
@@ -80,10 +80,14 @@ video, #overlay { position: absolute; inset: 0; width: 100%; height: 100%; objec
 .stats .big { font-size: 22px; }
 .actions { display: grid; gap: 10px; }
 .secondary { background: rgba(255,255,255,.08); font-weight: 700; padding: 14px 18px; border-radius: 999px; }
+#errBox { position: fixed; z-index: 50; left: max(12px, env(safe-area-inset-left,0px)); right: max(12px, env(safe-area-inset-right,0px)); top: calc(env(safe-area-inset-top,0px) + 60px);
+  background: #3a1214; color: #ffd7d7; border: 1px solid var(--bad); border-radius: 12px; padding: 10px 14px; font: 500 12px var(--mono); }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 </style>
 </head>
 <body>
+
+<div id="errBox" role="alert" hidden></div>
 
 <section id="intro">
   <div>
@@ -108,7 +112,7 @@ video, #overlay { position: absolute; inset: 0; width: 100%; height: 100%; objec
   </ol>
   <button class="primary" id="go">Ouvrir la caméra</button>
   <p class="err" id="introErr" hidden></p>
-  <p class="note">Tout reste sur votre téléphone. Rien n'est envoyé.</p>
+  <p class="note">Tout reste sur votre téléphone. Rien n'est envoyé. · version 2</p>
 </section>
 
 <section id="shoot" hidden>
@@ -347,57 +351,87 @@ function finish() {
   $('shutter').classList.remove('rec'); $('shutter').setAttribute('aria-label', 'Démarrer la prise de vue');
   $('timer').hidden = true; $('stopBtn').hidden = true;
   try { recorder && recorder.state !== 'inactive' && recorder.stop(); } catch (e) {}
-  setTimeout(showDone, 500);
+  // on passe tout de suite a l'ecran de fin ; les dernieres photos en cours d'enregistrement suivent
+  showDone().catch(showError);
 }
+
+/* toute erreur s'affiche a l'ecran (sur iPhone on ne voit pas la console) */
+function showError(e) {
+  const msg = 'Erreur : ' + (e && (e.message || e.reason?.message || e.type) || e);
+  const box = $('errBox'); box.textContent = msg; box.hidden = false;
+}
+addEventListener('error', e => showError(e.error || e.message));
+addEventListener('unhandledrejection', e => showError(e.reason));
 
 /* ---------- stabilisation ----------
    Chaque photo est recadree autour de la voiture detectee, a hauteur de voiture constante
    (la hauteur varie peu quand on tourne, la longueur beaucoup), lissee sur les vues voisines. */
-const OW = 1440, OH = 1080, CAR_H = 0.46;
-async function stabilise(list) {
+const OW = 1200, OH = 900, CAR_H = 0.46;
+function loadImg(blob) {            // <img> plutot que createImageBitmap : plus fiable sur Safari iPhone
+  return new Promise((res, rej) => {
+    const u = URL.createObjectURL(blob), im = new Image();
+    im.onload = () => res({ im, u }); im.onerror = () => { URL.revokeObjectURL(u); rej(new Error('photo illisible')); };
+    im.src = u;
+  });
+}
+async function stabilise(list, onFrame) {
   const hs = list.map(o => o.m && o.m.box ? o.m.box[3] : null);
-  const out = [];
+  const c = document.createElement('canvas'); c.width = OW; c.height = OH;
+  const x = c.getContext('2d');
   for (let k = 0; k < list.length; k++) {
     const { b, m } = list[k];
-    const bmp = await createImageBitmap(b);
-    const c = document.createElement('canvas'); c.width = OW; c.height = OH;
-    const x = c.getContext('2d'); x.fillStyle = '#0b0d10'; x.fillRect(0, 0, OW, OH);
-    if (m && m.box) {
-      const near = [-2, -1, 0, 1, 2].map(d => hs[(k + d + list.length) % list.length]).filter(Boolean).sort((a, b) => a - b);
-      const h = near[Math.floor(near.length / 2)];
-      const [bx, by, bw, bh] = m.box;
-      const ch = h / CAR_H, cw = ch * OW / OH;
-      const cx = bx + bw / 2, cy = by + bh * 0.52;
-      x.drawImage(bmp, cx - cw / 2, cy - ch * 0.54, cw, ch, 0, 0, OW, OH);
-    } else {
-      const s = Math.max(OW / bmp.width, OH / bmp.height);
-      x.drawImage(bmp, (OW - bmp.width * s) / 2, (OH - bmp.height * s) / 2, bmp.width * s, bmp.height * s);
-    }
-    if (bmp.close) bmp.close();
-    out.push(await new Promise(r => c.toBlob(r, 'image/jpeg', 0.9)));
+    try {
+      const { im, u } = await loadImg(b);
+      x.fillStyle = '#0b0d10'; x.fillRect(0, 0, OW, OH);
+      if (m && m.box) {
+        const near = [-2, -1, 0, 1, 2].map(d => hs[(k + d + list.length) % list.length]).filter(Boolean).sort((a, b) => a - b);
+        const h = near[Math.floor(near.length / 2)];
+        const [bx, by, bw, bh] = m.box;
+        const ch = h / CAR_H, cw = ch * OW / OH;
+        x.drawImage(im, bx + bw / 2 - cw / 2, by + bh * 0.52 - ch * 0.54, cw, ch, 0, 0, OW, OH);
+      } else {
+        const s = Math.max(OW / im.naturalWidth, OH / im.naturalHeight);
+        x.drawImage(im, (OW - im.naturalWidth * s) / 2, (OH - im.naturalHeight * s) / 2, im.naturalWidth * s, im.naturalHeight * s);
+      }
+      URL.revokeObjectURL(u);
+      const out = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.88));
+      onFrame(k, out || b);
+    } catch (e) { onFrame(k, b); }   // si une photo echoue, on garde la photo brute
   }
-  return out;
 }
 
 /* ---------- ecran de fin ---------- */
 let urls = [];
 async function showDone() {
+  // attendre (max 2 s) les photos encore en cours d'enregistrement
+  for (let w = 0; w < 20 && shots.some(s => s === 'pending'); w++) await new Promise(r => setTimeout(r, 100));
   const got = shots.map((b, i) => b instanceof Blob && { b, i, m: meta[i] }).filter(Boolean);
   $('sShots').textContent = got.length; $('sCover').textContent = `${got.length * STEP}°`;
-  $('sTime').textContent = `${Math.round((tEnd - t0) / 1000)} s`;
+  $('sTime').textContent = `${Math.max(0, Math.round((tEnd - t0) / 1000))} s`;
   $('savePhotos').textContent = `Enregistrer les ${got.length} photos`;
+  $('savePhotos').hidden = !got.length;
   $('shoot').hidden = true; $('done').hidden = false;
   const img = $('spinImg'), hint = $('spin').querySelector('.hint');
+  urls.forEach(u => u && URL.revokeObjectURL(u));
+  if (!got.length) {
+    img.removeAttribute('src');
+    hint.textContent = 'Aucune photo prise';
+    $('saveNote').textContent = 'Les photos ne se prennent que quand le cadre est vert (voiture entière et au centre). Appuyez sur Recommencer.';
+    return;
+  }
+  // photos brutes tout de suite, remplacees par les versions stabilisees au fur et a mesure
+  urls = got.map(o => URL.createObjectURL(o.b));
+  let k = 0; img.src = urls[0];
   hint.textContent = 'Stabilisation…';
-  urls.forEach(URL.revokeObjectURL); urls = [];
-  const stable = await stabilise(got);
-  urls = stable.map(b => URL.createObjectURL(b));
-  hint.textContent = 'Glissez pour tourner';
-  let k = 0; if (urls.length) img.src = urls[0];
   const el = $('spin'); let sx = null, sk = 0;
-  el.onpointerdown = e => { sx = e.clientX; sk = k; el.setPointerCapture(e.pointerId); };
-  el.onpointermove = e => { if (sx == null || !urls.length) return; k = ((sk - Math.round((e.clientX - sx) / 12)) % urls.length + urls.length) % urls.length; img.src = urls[k]; };
+  el.onpointerdown = e => { sx = e.clientX; sk = k; try { el.setPointerCapture(e.pointerId); } catch (_) {} };
+  el.onpointermove = e => { if (sx == null) return; k = ((sk - Math.round((e.clientX - sx) / 12)) % urls.length + urls.length) % urls.length; img.src = urls[k]; };
   el.onpointerup = el.onpointercancel = () => sx = null;
+  await stabilise(got, (j, blob) => {
+    URL.revokeObjectURL(urls[j]); urls[j] = URL.createObjectURL(blob);
+    if (j === k) img.src = urls[j];
+  });
+  hint.textContent = 'Glissez pour tourner';
 }
 
 async function share(files) {
@@ -420,7 +454,7 @@ $('saveVideo').onclick = () => {
   const ext = videoBlob.type.includes('mp4') ? 'mp4' : 'webm';
   share([new File([videoBlob], `360_video.${ext}`, { type: videoBlob.type })]);
 };
-$('again').onclick = () => { $('done').hidden = true; $('shoot').hidden = false; shots = new Array(N).fill(null); meta = []; paintRing(); };
+$('again').onclick = () => { $('done').hidden = true; $('shoot').hidden = false; $('errBox').hidden = true; $('savePhotos').hidden = false; shots = new Array(N).fill(null); meta = []; paintRing(); };
 </script>
 </body>
 </html>
