@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0b0d10">
+<title>Studio 360</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%2713%27 fill=%27none%27 stroke=%27%233ddc97%27 stroke-width=%274%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Ecran plein camera ; HUD aux bords, anneau de progression en bas */
+:root {
+  --bg: #0b0d10; --ink: #f2f4f7; --dim: #9aa3ae; --line: rgba(255,255,255,.16);
+  --ok: #3ddc97; --warn: #ffb547; --bad: #ff5d5d; --rec: #ff3b30; --glass: rgba(11,13,16,.62);
+  --display: "Archivo", system-ui, sans-serif; --mono: "JetBrains Mono", ui-monospace, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 var(--display); overflow: hidden; }
+button { font: inherit; color: inherit; border: 0; cursor: pointer; }
+button:focus-visible { outline: 2px solid var(--ok); outline-offset: 3px; }
+[hidden] { display: none !important; }
+
+/* ---------- accueil ---------- */
+#intro { position: fixed; inset: 0; overflow-y: auto; padding: calc(env(safe-area-inset-top,0px) + 28px) max(20px, env(safe-area-inset-right,0px)) calc(env(safe-area-inset-bottom,0px) + 28px) max(20px, env(safe-area-inset-left,0px));
+  display: flex; flex-direction: column; gap: 22px; max-width: 520px; margin: 0 auto; }
+.kicker { font: 500 11px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
+h1 { font-weight: 800; font-size: 40px; line-height: 1; margin: 6px 0 0; letter-spacing: -.02em; text-wrap: balance; }
+.lead { color: var(--dim); margin: 0; }
+.steps { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; counter-reset: s; }
+.steps li { counter-increment: s; display: grid; grid-template-columns: 34px 1fr; gap: 12px; align-items: start; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; }
+.steps li::before { content: counter(s); font: 500 13px var(--mono); width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: rgba(255,255,255,.08); }
+.steps b { display: block; font-weight: 700; }
+.steps span { color: var(--dim); font-size: 14px; }
+.diagram { align-self: center; width: 210px; max-width: 100%; }
+.diagram text { font: 500 10px var(--mono); fill: var(--dim); }
+.primary { background: var(--ink); color: var(--bg); font-weight: 700; font-size: 17px; padding: 16px 20px; border-radius: 999px; }
+.primary:disabled { opacity: .5; }
+.note { font-size: 13px; color: var(--dim); text-align: center; margin: 0; }
+.err { color: var(--bad); text-align: center; margin: 0; }
+
+/* ---------- prise de vue ---------- */
+#shoot { position: fixed; inset: 0; }
+video, #overlay { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+#overlay { pointer-events: none; }
+.top { position: absolute; left: 0; right: 0; top: 0; padding: calc(env(safe-area-inset-top,0px) + 12px) max(14px, env(safe-area-inset-right,0px)) 0 max(14px, env(safe-area-inset-left,0px));
+  display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.pill { background: var(--glass); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-radius: 999px; padding: 8px 14px; font-weight: 700; font-size: 14px; display: inline-flex; align-items: center; gap: 8px; }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--dim); flex: none; }
+.pill.ok .dot { background: var(--ok); } .pill.warn .dot { background: var(--warn); } .pill.bad .dot { background: var(--bad); }
+#timer { font: 500 13px var(--mono); }
+#timer .dot { background: var(--rec); animation: blink 1s steps(2) infinite; }
+@keyframes blink { 50% { opacity: .2; } }
+#tip { position: absolute; left: 50%; top: 42%; transform: translate(-50%,-50%); text-align: center; font-weight: 800; font-size: 26px; line-height: 1.1;
+  text-shadow: 0 2px 18px rgba(0,0,0,.6); padding: 0 24px; width: 100%; max-width: 560px; transition: opacity .2s; pointer-events: none; }
+#tip small { display: block; font: 500 13px var(--mono); margin-top: 8px; opacity: .85; letter-spacing: .02em; }
+.bottom { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 max(14px, env(safe-area-inset-right,0px)) calc(env(safe-area-inset-bottom,0px) + 18px) max(14px, env(safe-area-inset-left,0px));
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; }
+#ring { width: 132px; height: 132px; position: relative; }
+#ring svg { position: absolute; inset: 0; }
+#shutter { position: absolute; inset: 24px; border-radius: 50%; background: var(--ink); display: grid; place-items: center; transition: transform .15s, border-radius .2s, inset .2s, background .2s; }
+#shutter.rec { inset: 42px; border-radius: 12px; background: var(--rec); }
+#shutter:active { transform: scale(.94); }
+.side { display: flex; flex-direction: column; gap: 2px; text-shadow: 0 1px 8px rgba(0,0,0,.6); }
+.side.r { align-items: flex-end; text-align: right; }
+.big { font-weight: 800; font-size: 26px; font-variant-numeric: tabular-nums; line-height: 1; }
+.lbl { font: 500 10px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ink); opacity: .8; }
+.ghost { background: var(--glass); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); padding: 8px 12px; border-radius: 999px; font-size: 13px; font-weight: 700; margin-top: 6px; }
+
+/* ---------- ecran de fin ---------- */
+#done { position: fixed; inset: 0; overflow-y: auto; background: var(--bg); padding: calc(env(safe-area-inset-top,0px) + 24px) max(20px, env(safe-area-inset-right,0px)) calc(env(safe-area-inset-bottom,0px) + 24px) max(20px, env(safe-area-inset-left,0px)); }
+#done .wrap { max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+#spin { position: relative; border-radius: 14px; overflow: hidden; background: #000; aspect-ratio: 4/3; max-width: 100%; max-height: 70vh; touch-action: none; cursor: grab; }
+#spin img { width: 100%; height: 100%; object-fit: contain; display: block; user-select: none; -webkit-user-drag: none; }
+#spin .hint { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); font: 500 11px var(--mono); background: var(--glass); padding: 5px 10px; border-radius: 999px; pointer-events: none; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.stats div { border: 1px solid var(--line); border-radius: 12px; padding: 12px; min-width: 0; }
+.stats .big { font-size: 22px; }
+.actions { display: grid; gap: 10px; }
+.secondary { background: rgba(255,255,255,.08); font-weight: 700; padding: 14px 18px; border-radius: 999px; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+
+<section id="intro">
+  <div>
+    <div class="kicker">Prise de vue guidée · 360°</div>
+    <h1>Studio 360</h1>
+  </div>
+  <p class="lead">L'appli repère la voiture à l'écran et vous guide pendant que vous en faites le tour. Elle garde 36 vraies photos, une tous les 10°, pour la rotation au doigt.</p>
+  <svg class="diagram" viewBox="0 0 210 170" aria-hidden="true">
+    <circle cx="105" cy="85" r="66" fill="none" stroke="rgba(255,255,255,.25)" stroke-dasharray="3 5"/>
+    <rect x="78" y="62" width="54" height="46" rx="14" fill="none" stroke="#f2f4f7" stroke-width="2"/>
+    <rect x="86" y="70" width="38" height="12" rx="4" fill="rgba(255,255,255,.25)"/>
+    <path d="M150 34 A66 66 0 0 1 171 85" fill="none" stroke="#3ddc97" stroke-width="3" stroke-linecap="round"/>
+    <path d="M168 76 l3 9 l7 -6" fill="none" stroke="#3ddc97" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="146" cy="30" r="6" fill="#3ddc97"/>
+    <text x="105" y="164" text-anchor="middle">environ 3 m · un tour complet</text>
+  </svg>
+  <ol class="steps">
+    <li><div><b>Téléphone à l'horizontale</b><span>À hauteur de poitrine, environ 3 m de la voiture.</span></div></li>
+    <li><div><b>Commencez face à l'avant</b><span>Attendez que le cadre vert entoure la voiture, puis appuyez sur le bouton.</span></div></li>
+    <li><div><b>Tournez lentement</b><span>Gardez la voiture entière et au centre. Un tour complet prend environ 40 secondes.</span></div></li>
+    <li><div><b>L'appli s'arrête seule</b><span>Quand l'anneau est plein, les 36 photos et la vidéo sont prêtes.</span></div></li>
+  </ol>
+  <button class="primary" id="go">Ouvrir la caméra</button>
+  <p class="err" id="introErr" hidden></p>
+  <p class="note">Tout reste sur votre téléphone. Rien n'est envoyé.</p>
+</section>
+
+<section id="shoot" hidden>
+  <video id="cam" playsinline muted autoplay></video>
+  <canvas id="overlay"></canvas>
+  <div class="top">
+    <div class="pill" id="state"><span class="dot"></span><span id="stateTxt">Chargement de la détection…</span></div>
+    <div class="pill" id="timer" hidden><span class="dot"></span><span id="timerTxt">0:00</span></div>
+  </div>
+  <div id="tip"></div>
+  <div class="bottom">
+    <div class="side"><span class="big" id="pct">0 %</span><span class="lbl">du tour</span></div>
+    <div id="ring">
+      <svg viewBox="0 0 132 132" id="ringSvg" aria-hidden="true"></svg>
+      <button id="shutter" aria-label="Démarrer la prise de vue"></button>
+    </div>
+    <div class="side r"><span class="big" id="shots">0/36</span><span class="lbl">photos</span><button class="ghost" id="stopBtn" hidden>Terminer</button></div>
+  </div>
+</section>
+
+<section id="done" hidden>
+  <div class="wrap">
+    <div><div class="kicker">Prise de vue terminée</div><h1 style="font-size:32px">Votre 360</h1></div>
+    <div id="spin"><img id="spinImg" alt="Voiture, vue tournante"><span class="hint">Glissez pour tourner</span></div>
+    <div class="stats">
+      <div><span class="big" id="sShots">0</span><br><span class="lbl">photos</span></div>
+      <div><span class="big" id="sCover">0°</span><br><span class="lbl">couverts</span></div>
+      <div><span class="big" id="sTime">0 s</span><br><span class="lbl">durée</span></div>
+    </div>
+    <div class="actions">
+      <button class="primary" id="savePhotos">Enregistrer les 36 photos</button>
+      <button class="secondary" id="saveVideo">Enregistrer la vidéo</button>
+      <button class="secondary" id="again">Recommencer</button>
+    </div>
+    <p class="note" id="saveNote">Sur iPhone, choisissez « Enregistrer les images » dans le menu de partage, puis envoyez-les sur le Mac par AirDrop.</p>
+  </div>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+const N = 36, STEP = 360 / N;
+const cam = $('cam'), ov = $('overlay'), g = ov.getContext('2d');
+
+let model = null, stream = null;
+let det = null, detAt = 0;              // derniere detection voiture {x,y,w,h} en px video
+let smooth = null;
+let heading = null, hasSensor = false;  // cap boussole/gyro en degres
+let rec = false, unwrapped = 0, lastH = null, lastHT = 0, speed = 0;
+let shots = new Array(N).fill(null), meta = [];
+let recorder = null, chunks = [], videoBlob = null, t0 = 0, tEnd = 0, sensorless = false;
+
+/* ---------- anneau : 36 segments ---------- */
+(function buildRing() {
+  const svg = $('ringSvg'); let h = '';
+  for (let i = 0; i < N; i++) {
+    const a0 = (i * STEP - 90 + 1.4) * Math.PI / 180, a1 = ((i + 1) * STEP - 90 - 1.4) * Math.PI / 180, r = 60;
+    const p = (a) => `${66 + r * Math.cos(a)} ${66 + r * Math.sin(a)}`;
+    h += `<path id="seg${i}" d="M${p(a0)} A${r} ${r} 0 0 1 ${p(a1)}" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="7" stroke-linecap="round"/>`;
+  }
+  svg.innerHTML = h;
+})();
+function paintRing() {
+  for (let i = 0; i < N; i++) $('seg' + i).setAttribute('stroke', shots[i] ? '#3ddc97' : 'rgba(255,255,255,.22)');
+  const n = shots.filter(Boolean).length;
+  $('shots').textContent = `${n}/${N}`;
+  $('pct').textContent = `${Math.round(n / N * 100)} %`;
+}
+
+/* ---------- capteurs ---------- */
+function onOrient(e) {
+  let h = null;
+  if (typeof e.webkitCompassHeading === 'number') h = e.webkitCompassHeading;   // iOS
+  else if (e.alpha != null) h = 360 - e.alpha;                                   // Android
+  if (h == null || isNaN(h)) return;
+  hasSensor = true; heading = h;
+  const now = performance.now();
+  if (lastH != null) {
+    const d = ((h - lastH + 540) % 360) - 180;
+    const dt = Math.max(1, now - lastHT) / 1000;
+    speed = speed * 0.8 + Math.abs(d / dt) * 0.2;
+    if (rec) unwrapped += d;
+  }
+  lastH = h; lastHT = now;
+}
+
+async function askSensors() {
+  try {
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+      const r = await DeviceOrientationEvent.requestPermission();
+      if (r !== 'granted') return;
+    }
+    window.addEventListener('deviceorientation', onOrient, true);
+  } catch (e) { /* pas de capteur : mode chrono */ }
+}
+
+/* ---------- demarrage ---------- */
+$('go').onclick = async () => {
+  $('go').disabled = true; $('introErr').hidden = true;
+  await askSensors();
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
+  } catch (e) {
+    $('introErr').textContent = location.protocol !== 'https:' && location.hostname !== 'localhost'
+      ? "La caméra demande une adresse sécurisée (https). Ouvrez l'appli depuis son lien https."
+      : "Accès à la caméra refusé. Autorisez-le dans les réglages du navigateur, puis réessayez.";
+    $('introErr').hidden = false; $('go').disabled = false; return;
+  }
+  cam.srcObject = stream; await cam.play();
+  $('intro').hidden = true; $('shoot').hidden = false;
+  try { await navigator.wakeLock?.request('screen'); } catch (e) {}
+  try { model = await cocoSsd.load({ base: 'lite_mobilenet_v2' }); } catch (e) { setState('bad', 'Détection indisponible'); }
+  loop();
+};
+
+/* ---------- detection en continu ---------- */
+let busy = false;
+async function detect() {
+  if (!model || busy || cam.readyState < 2) return;
+  busy = true;
+  try {
+    const preds = await model.detect(cam, 6, 0.35);
+    const cars = preds.filter(p => ['car', 'truck', 'bus'].includes(p.class));
+    if (cars.length) {
+      const vw = cam.videoWidth, vh = cam.videoHeight;
+      cars.sort((a, b) => score(b.bbox, vw) - score(a.bbox, vw));   // la plus grande et la plus centrale
+      const [x, y, w, h] = cars[0].bbox; det = { x, y, w, h }; detAt = performance.now();
+    }
+  } catch (e) {}
+  busy = false;
+}
+function score([x, y, w, h], vw) { const cx = x + w / 2 - vw / 2; return w * h - Math.abs(cx) * h * 0.5; }
+
+function setState(kind, txt) { $('state').className = 'pill ' + kind; $('stateTxt').textContent = txt; }
+function setTip(main, sub) { $('tip').innerHTML = main ? `${main}${sub ? `<small>${sub}</small>` : ''}` : ''; }
+
+function guidance() {
+  const fresh = det && performance.now() - detAt < 900;
+  if (!model) return { ok: false, kind: 'warn', state: 'Chargement de la détection…', tip: '' };
+  if (!fresh) return { ok: false, kind: 'bad', state: 'Voiture non détectée', tip: 'Cadrez la voiture', sub: 'Entière, au centre de l’écran' };
+  const vw = cam.videoWidth, vh = cam.videoHeight;
+  const fw = smooth.w / vw, cx = (smooth.x + smooth.w / 2) / vw - 0.5, cy = (smooth.y + smooth.h / 2) / vh - 0.5;
+  const edge = smooth.x < vw * 0.015 || smooth.x + smooth.w > vw * 0.985 || smooth.y < vh * 0.015 || smooth.y + smooth.h > vh * 0.985;
+  if (vh > vw) return { ok: false, kind: 'warn', state: 'Voiture détectée', tip: 'Tournez le téléphone', sub: 'À l’horizontale' };
+  if (edge || fw > 0.9) return { ok: false, kind: 'warn', state: 'Trop près', tip: 'Reculez un peu', sub: 'La voiture doit tenir entière' };
+  if (fw < 0.42) return { ok: false, kind: 'warn', state: 'Trop loin', tip: 'Approchez-vous', sub: 'La voiture doit remplir l’écran' };
+  if (Math.abs(cx) > 0.14) return { ok: false, kind: 'warn', state: 'Décentrée', tip: cx > 0 ? 'Visez plus à droite' : 'Visez plus à gauche', sub: 'Voiture au centre' };
+  if (Math.abs(cy) > 0.18) return { ok: false, kind: 'warn', state: 'Décentrée', tip: cy > 0 ? 'Visez plus bas' : 'Visez plus haut', sub: '' };
+  if (rec && hasSensor && speed > 28) return { ok: false, kind: 'warn', state: 'Trop rapide', tip: 'Plus lentement', sub: 'Environ 40 s pour le tour' };
+  return { ok: true, kind: 'ok', state: 'Voiture bien cadrée', tip: rec ? '' : 'Appuyez pour commencer', sub: rec ? '' : 'Placez-vous face à l’avant' };
+}
+
+/* ---------- capture d'une photo ---------- */
+const grab = document.createElement('canvas');
+function takeShot(i) {
+  grab.width = cam.videoWidth; grab.height = cam.videoHeight;
+  grab.getContext('2d').drawImage(cam, 0, 0);
+  const m = { index: i, angle: i * STEP, heading: heading == null ? null : +heading.toFixed(1), t: +((performance.now() - t0) / 1000).toFixed(2),
+    box: smooth ? [smooth.x, smooth.y, smooth.w, smooth.h].map(v => Math.round(v)) : null, video: [cam.videoWidth, cam.videoHeight], speed: Math.round(speed) };
+  shots[i] = 'pending';
+  grab.toBlob(b => {
+    shots[i] = b; meta[i] = m; paintRing();
+    if (navigator.vibrate) navigator.vibrate(8);
+  }, 'image/jpeg', 0.92);
+}
+
+/* ---------- boucle d'affichage ---------- */
+let lastDet = 0, running = false;
+function loop() {
+  running = true;
+  const now = performance.now();
+  if (now - lastDet > 140) { lastDet = now; detect(); }
+  if (det) {
+    if (!smooth) smooth = { ...det };
+    for (const k of ['x', 'y', 'w', 'h']) smooth[k] += (det[k] - smooth[k]) * 0.35;
+  }
+  if (!$('shoot').hidden) {
+    const gd = guidance();
+    setState(gd.kind, gd.state); setTip(gd.tip, gd.sub);
+    draw(gd);
+    if (rec) {
+      const el = (now - t0) / 1000;
+      $('timerTxt').textContent = `${Math.floor(el / 60)}:${String(Math.floor(el % 60)).padStart(2, '0')}`;
+      // angle parcouru : boussole si dispo, sinon le temps (tour de 40 s)
+      const turned = hasSensor && !sensorless ? Math.abs(unwrapped) : el / 40 * 360;
+      const i = Math.floor(turned / STEP);
+      if (gd.ok && i >= 0 && i < N && !shots[i]) takeShot(i);
+      if (turned >= 360 + STEP / 2 || shots.every(Boolean)) finish();
+    }
+  }
+  requestAnimationFrame(loop);
+}
+
+function draw(gd) {
+  const r = ov.getBoundingClientRect(), dpr = Math.min(2, devicePixelRatio || 1);
+  if (ov.width !== Math.round(r.width * dpr)) { ov.width = Math.round(r.width * dpr); ov.height = Math.round(r.height * dpr); }
+  g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, r.width, r.height);
+  if (!smooth || !cam.videoWidth || performance.now() - detAt > 900) return;
+  const s = Math.max(r.width / cam.videoWidth, r.height / cam.videoHeight);       // video en object-fit: cover
+  const ox = (r.width - cam.videoWidth * s) / 2, oy = (r.height - cam.videoHeight * s) / 2;
+  const x = ox + smooth.x * s, y = oy + smooth.y * s, w = smooth.w * s, h = smooth.h * s;
+  const col = gd.ok ? '#3ddc97' : '#ffb547', L = Math.min(w, h) * 0.18;
+  g.strokeStyle = col; g.lineWidth = 4; g.lineCap = 'round';
+  g.beginPath();
+  for (const [cx, cy, dx, dy] of [[x, y, 1, 1], [x + w, y, -1, 1], [x, y + h, 1, -1], [x + w, y + h, -1, -1]]) {
+    g.moveTo(cx + dx * L, cy); g.lineTo(cx, cy); g.lineTo(cx, cy + dy * L);
+  }
+  g.stroke();
+  g.strokeStyle = 'rgba(255,255,255,.55)'; g.lineWidth = 1.5;
+  g.beginPath(); g.moveTo(r.width / 2 - 10, r.height / 2); g.lineTo(r.width / 2 + 10, r.height / 2);
+  g.moveTo(r.width / 2, r.height / 2 - 10); g.lineTo(r.width / 2, r.height / 2 + 10); g.stroke();
+}
+
+/* ---------- enregistrement ---------- */
+$('shutter').onclick = () => rec ? finish() : start();
+$('stopBtn').onclick = () => finish();
+function start() {
+  shots = new Array(N).fill(null); meta = []; paintRing();
+  rec = true; unwrapped = 0; t0 = performance.now(); sensorless = !hasSensor;
+  $('shutter').classList.add('rec'); $('shutter').setAttribute('aria-label', 'Arrêter');
+  $('timer').hidden = false; $('stopBtn').hidden = false;
+  chunks = []; videoBlob = null;
+  try {
+    const mime = ['video/mp4', 'video/webm;codecs=vp9', 'video/webm'].find(m => window.MediaRecorder && MediaRecorder.isTypeSupported(m));
+    recorder = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 12e6 } : undefined);
+    recorder.ondataavailable = e => e.data.size && chunks.push(e.data);
+    recorder.onstop = () => { videoBlob = new Blob(chunks, { type: recorder.mimeType || 'video/mp4' }); };
+    recorder.start(1000);
+  } catch (e) { recorder = null; }
+}
+function finish() {
+  if (!rec) return;
+  rec = false; tEnd = performance.now();
+  $('shutter').classList.remove('rec'); $('shutter').setAttribute('aria-label', 'Démarrer la prise de vue');
+  $('timer').hidden = true; $('stopBtn').hidden = true;
+  try { recorder && recorder.state !== 'inactive' && recorder.stop(); } catch (e) {}
+  setTimeout(showDone, 500);
+}
+
+/* ---------- stabilisation ----------
+   Chaque photo est recadree autour de la voiture detectee, a hauteur de voiture constante
+   (la hauteur varie peu quand on tourne, la longueur beaucoup), lissee sur les vues voisines. */
+const OW = 1440, OH = 1080, CAR_H = 0.46;
+async function stabilise(list) {
+  const hs = list.map(o => o.m && o.m.box ? o.m.box[3] : null);
+  const out = [];
+  for (let k = 0; k < list.length; k++) {
+    const { b, m } = list[k];
+    const bmp = await createImageBitmap(b);
+    const c = document.createElement('canvas'); c.width = OW; c.height = OH;
+    const x = c.getContext('2d'); x.fillStyle = '#0b0d10'; x.fillRect(0, 0, OW, OH);
+    if (m && m.box) {
+      const near = [-2, -1, 0, 1, 2].map(d => hs[(k + d + list.length) % list.length]).filter(Boolean).sort((a, b) => a - b);
+      const h = near[Math.floor(near.length / 2)];
+      const [bx, by, bw, bh] = m.box;
+      const ch = h / CAR_H, cw = ch * OW / OH;
+      const cx = bx + bw / 2, cy = by + bh * 0.52;
+      x.drawImage(bmp, cx - cw / 2, cy - ch * 0.54, cw, ch, 0, 0, OW, OH);
+    } else {
+      const s = Math.max(OW / bmp.width, OH / bmp.height);
+      x.drawImage(bmp, (OW - bmp.width * s) / 2, (OH - bmp.height * s) / 2, bmp.width * s, bmp.height * s);
+    }
+    if (bmp.close) bmp.close();
+    out.push(await new Promise(r => c.toBlob(r, 'image/jpeg', 0.9)));
+  }
+  return out;
+}
+
+/* ---------- ecran de fin ---------- */
+let urls = [];
+async function showDone() {
+  const got = shots.map((b, i) => b instanceof Blob && { b, i, m: meta[i] }).filter(Boolean);
+  $('sShots').textContent = got.length; $('sCover').textContent = `${got.length * STEP}°`;
+  $('sTime').textContent = `${Math.round((tEnd - t0) / 1000)} s`;
+  $('savePhotos').textContent = `Enregistrer les ${got.length} photos`;
+  $('shoot').hidden = true; $('done').hidden = false;
+  const img = $('spinImg'), hint = $('spin').querySelector('.hint');
+  hint.textContent = 'Stabilisation…';
+  urls.forEach(URL.revokeObjectURL); urls = [];
+  const stable = await stabilise(got);
+  urls = stable.map(b => URL.createObjectURL(b));
+  hint.textContent = 'Glissez pour tourner';
+  let k = 0; if (urls.length) img.src = urls[0];
+  const el = $('spin'); let sx = null, sk = 0;
+  el.onpointerdown = e => { sx = e.clientX; sk = k; el.setPointerCapture(e.pointerId); };
+  el.onpointermove = e => { if (sx == null || !urls.length) return; k = ((sk - Math.round((e.clientX - sx) / 12)) % urls.length + urls.length) % urls.length; img.src = urls[k]; };
+  el.onpointerup = el.onpointercancel = () => sx = null;
+}
+
+async function share(files) {
+  try {
+    if (navigator.canShare && navigator.canShare({ files })) { await navigator.share({ files }); return; }
+  } catch (e) { if (e.name === 'AbortError') return; }
+  for (const f of files) {           // ordinateur : telechargement direct
+    const a = document.createElement('a'); a.href = URL.createObjectURL(f); a.download = f.name;
+    document.body.appendChild(a); a.click(); a.remove();
+  }
+}
+$('savePhotos').onclick = () => {
+  const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
+  const files = shots.map((b, i) => b instanceof Blob && new File([b], `360_${stamp}_${String(i).padStart(2, '0')}.jpg`, { type: 'image/jpeg' })).filter(Boolean);
+  // que des images : sinon iOS ne propose pas « Enregistrer les images » (le Mac retrouve la voiture lui-meme)
+  share(files);
+};
+$('saveVideo').onclick = () => {
+  if (!videoBlob) { $('saveNote').textContent = 'La vidéo n’a pas pu être enregistrée sur cet appareil. Les photos restent disponibles.'; return; }
+  const ext = videoBlob.type.includes('mp4') ? 'mp4' : 'webm';
+  share([new File([videoBlob], `360_video.${ext}`, { type: videoBlob.type })]);
+};
+$('again').onclick = () => { $('done').hidden = true; $('shoot').hidden = false; shots = new Array(N).fill(null); meta = []; paintRing(); };
+</script>
+</body>
+</html>
