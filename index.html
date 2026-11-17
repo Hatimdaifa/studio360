@@ -124,7 +124,7 @@ video, #overlay { position: absolute; inset: 0; width: 100%; height: 100%; objec
     <div class="kicker">Prise de vue guidée · 360°</div>
     <h1>Studio 360</h1>
   </div>
-  <p class="lead">L'appli repère la voiture à l'écran et vous guide pendant que vous en faites le tour. Elle garde 36 vraies photos, une tous les 10°, pour la rotation au doigt.</p>
+  <p class="lead">L'appli repère la voiture à l'écran et vous guide pendant que vous en faites le tour. Elle garde 72 vraies photos, une tous les 5°, et les redresse automatiquement, même si vous passez du mode portrait au mode paysage.</p>
   <svg class="diagram" viewBox="0 0 210 170" aria-hidden="true">
     <circle cx="105" cy="85" r="66" fill="none" stroke="#A8DCD1" stroke-width="2" stroke-dasharray="3 5"/>
     <rect x="78" y="62" width="54" height="46" rx="14" fill="none" stroke="#15323A" stroke-width="2"/>
@@ -135,14 +135,14 @@ video, #overlay { position: absolute; inset: 0; width: 100%; height: 100%; objec
     <text x="105" y="164" text-anchor="middle">environ 3 m · un tour complet</text>
   </svg>
   <ol class="steps">
-    <li><div><b>Téléphone à l'horizontale</b><span>À hauteur de poitrine, environ 3 m de la voiture.</span></div></li>
+    <li><div><b>Portrait ou paysage</b><span>À hauteur de poitrine. Paysage de préférence ; passez en portrait si vous manquez de recul, l’appli suit.</span></div></li>
     <li><div><b>Commencez face à l'avant</b><span>Attendez que le cadre bleu entoure la voiture, puis appuyez sur le bouton.</span></div></li>
     <li><div><b>Tournez lentement</b><span>Gardez la voiture entière et au centre. Un tour complet prend environ 40 secondes.</span></div></li>
-    <li><div><b>L'appli s'arrête seule</b><span>Quand l'anneau est plein, les 36 photos et la vidéo sont prêtes.</span></div></li>
+    <li><div><b>L'appli s'arrête seule</b><span>Quand l'anneau est plein, les 72 photos et la vidéo sont prêtes.</span></div></li>
   </ol>
   <button class="primary flow" id="go"><svg class="arr a2" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg><span class="txt">Ouvrir la caméra</span><span class="circle" aria-hidden="true"></span><svg class="arr a1" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
   <p class="err" id="introErr" hidden></p>
-  <p class="note">Tout reste sur votre téléphone. Rien n'est envoyé. · version 6</p>
+  <p class="note">Rien n'est envoyé sans votre accord : seul le bouton « Créer mon 360 » envoie les photos. · version 7</p>
 </section>
 
 <section id="shoot" hidden>
@@ -160,7 +160,7 @@ video, #overlay { position: absolute; inset: 0; width: 100%; height: 100%; objec
       <svg viewBox="0 0 132 132" id="ringSvg" aria-hidden="true"></svg>
       <button id="shutter" aria-label="Démarrer la prise de vue"></button>
     </div>
-    <div class="side r"><span class="big" id="shots">0/36</span><span class="lbl">photos</span><button class="ghost" id="stopBtn" hidden>Terminer</button></div>
+    <div class="side r"><span class="big" id="shots">0/72</span><span class="lbl">photos</span><button class="ghost" id="stopBtn" hidden>Terminer</button></div>
   </div>
 </section>
 
@@ -174,7 +174,7 @@ video, #overlay { position: absolute; inset: 0; width: 100%; height: 100%; objec
       <div><span class="big" id="sTime">0 s</span><br><span class="lbl">durée</span></div>
     </div>
     <div class="cloud" id="cloud">
-      <div><div class="kicker">Page 360 en ligne</div><p class="lead" style="margin-top:4px">Le serveur détoure la voiture, floute la plaque et crée la page à partager. Environ 1 minute.</p></div>
+      <div><div class="kicker">Page 360 en ligne</div><p class="lead" style="margin-top:4px">Le serveur détoure la voiture, floute la plaque et crée la page à partager. Environ 2 minutes.</p></div>
       <label>Nom de la voiture<input id="cNom" maxlength="60" placeholder="Ex. Dacia Sandero 2023" autocomplete="off"></label>
       <label>Code d'accès<input id="cCode" maxlength="20" placeholder="S360-XXXXXX" autocomplete="off" autocapitalize="characters" spellcheck="false"></label>
       <button class="primary flow" id="cGo"><svg class="arr a2" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg><span class="txt">Créer mon 360</span><span class="circle" aria-hidden="true"></span><svg class="arr a1" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
@@ -186,7 +186,7 @@ video, #overlay { position: absolute; inset: 0; width: 100%; height: 100%; objec
       </div>
     </div>
     <div class="actions">
-      <button class="primary flow" id="savePhotos"><svg class="arr a2" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg><span class="txt">Enregistrer les 36 photos</span><span class="circle" aria-hidden="true"></span><svg class="arr a1" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
+      <button class="primary flow" id="savePhotos"><svg class="arr a2" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg><span class="txt">Enregistrer les 72 photos</span><span class="circle" aria-hidden="true"></span><svg class="arr a1" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
       <button class="secondary" id="saveVideo">Enregistrer la vidéo</button>
       <button class="secondary" id="again">Recommencer</button>
     </div>
@@ -198,7 +198,7 @@ video, #overlay { position: absolute; inset: 0; width: 100%; height: 100%; objec
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
 <script>
 const $ = (id) => document.getElementById(id);
-const N = 36, STEP = 360 / N;
+const N = 72, STEP = 360 / N;
 const cam = $('cam'), ov = $('overlay'), g = ov.getContext('2d');
 
 let model = null, stream = null;
@@ -209,11 +209,11 @@ let rec = false, unwrapped = 0, lastH = null, lastHT = 0, speed = 0;
 let shots = new Array(N).fill(null), meta = [];
 let recorder = null, chunks = [], videoBlob = null, t0 = 0, tEnd = 0, sensorless = false;
 
-/* ---------- anneau : 36 segments ---------- */
+/* ---------- anneau : 72 segments ---------- */
 (function buildRing() {
   const svg = $('ringSvg'); let h = '';
   for (let i = 0; i < N; i++) {
-    const a0 = (i * STEP - 90 + 1.4) * Math.PI / 180, a1 = ((i + 1) * STEP - 90 - 1.4) * Math.PI / 180, r = 60;
+    const a0 = (i * STEP - 90 + 0.6) * Math.PI / 180, a1 = ((i + 1) * STEP - 90 - 0.6) * Math.PI / 180, r = 60;
     const p = (a) => `${66 + r * Math.cos(a)} ${66 + r * Math.sin(a)}`;
     h += `<path id="seg${i}" d="M${p(a0)} A${r} ${r} 0 0 1 ${p(a1)}" fill="none" stroke="rgba(255,255,255,.28)" stroke-width="7" stroke-linecap="round"/>`;
   }
@@ -238,7 +238,15 @@ function camHeading(e) {
   if (Math.hypot(vx, vy) < 0.25) return null;          // camera vers le ciel ou le sol
   return (Math.atan2(vx, vy) / r + 360) % 360;
 }
+let devUp = null;                       // angle (deg, sens horaire) du haut du telephone vers le vrai haut
+function upAngle(e) {
+  if (e.beta == null || e.gamma == null) return null;
+  const r = Math.PI / 180, ux = -Math.cos(e.beta * r) * Math.sin(e.gamma * r), uy = Math.sin(e.beta * r);
+  if (Math.hypot(ux, uy) < 0.3) return null;           // telephone a plat : on garde la derniere valeur
+  return Math.atan2(ux, uy) / r;
+}
 function onOrient(e) {
+  const u = upAngle(e); if (u != null) devUp = u;
   let h = camHeading(e);
   if (h == null && typeof e.webkitCompassHeading === 'number') h = e.webkitCompassHeading;
   if (h == null || isNaN(h)) return;
@@ -287,18 +295,66 @@ $('go').onclick = async () => {
   loop();
 };
 
-/* ---------- detection en continu ---------- */
-let busy = false;
+/* ---------- redressement : l'image est tournee pour que le sol soit horizontal ----------
+   portrait, paysage ou telephone penche : tout est ramene droit, photo et detection.
+   Le flux video suit en principe l'ecran ; si l'ecran est verrouille, on le detecte (followsScreen). */
+let followsScreen = true, rot = 0, UW = 0, UH = 0, lastFlipTry = 0;
+function screenAngle() { const a = screen.orientation ? screen.orientation.angle : (window.orientation || 0); return ((a % 360) + 360) % 360; }
+function correction(fs) {
+  if (devUp == null) return 0;
+  // fs : la video suit l'ecran (cas normal). Sinon (ecran verrouille sur certains telephones) la video
+  // est deja droite au quart de tour pres : on ne corrige que l'inclinaison residuelle.
+  let c = fs ? devUp - screenAngle() : devUp - 90 * Math.round(devUp / 90);
+  return ((c + 540) % 360) - 180;                  // degres, sens horaire, -180..180
+}
+function geom(c) {                                 // dimensions de l'image redressee
+  const vw = cam.videoWidth, vh = cam.videoHeight, k = ((Math.round(c / 90) % 4) + 4) % 4;
+  return k % 2 ? [vh, vw] : [vw, vh];
+}
+function drawUpright(cv, c, scale) {
+  const [w, h] = geom(c), vw = cam.videoWidth, vh = cam.videoHeight;
+  cv.width = Math.round(w * scale); cv.height = Math.round(h * scale);
+  const x = cv.getContext('2d');
+  x.fillStyle = '#000'; x.fillRect(0, 0, cv.width, cv.height);
+  x.setTransform(scale, 0, 0, scale, cv.width / 2, cv.height / 2);
+  x.rotate(-c * Math.PI / 180);
+  x.drawImage(cam, -vw / 2, -vh / 2);
+  x.setTransform(1, 0, 0, 1, 0, 0);
+}
+function toVideo(ux, uy) {                         // point de l'image redressee -> point de la video
+  const r = rot * Math.PI / 180, dx = ux - UW / 2, dy = uy - UH / 2;
+  return [dx * Math.cos(r) - dy * Math.sin(r) + cam.videoWidth / 2, dx * Math.sin(r) + dy * Math.cos(r) + cam.videoHeight / 2];
+}
+
+/* ---------- detection en continu (sur l'image redressee) ---------- */
+let busy = false; const dcv = document.createElement('canvas');
+async function findCar(c) {
+  const [w, h] = geom(c), sc = Math.min(1, 640 / Math.max(w, h));
+  drawUpright(dcv, c, sc);
+  const preds = await model.detect(dcv, 6, 0.35);
+  const cars = preds.filter(p => ['car', 'truck', 'bus'].includes(p.class));
+  if (!cars.length) return null;
+  cars.sort((a, b) => score(b.bbox, w * sc) - score(a.bbox, w * sc));   // la plus grande et la plus centrale
+  const [x, y, bw, bh] = cars[0].bbox;
+  return { c, w, h, box: { x: x / sc, y: y / sc, w: bw / sc, h: bh / sc } };
+}
 async function detect() {
   if (!model || busy || cam.readyState < 2) return;
   busy = true;
   try {
-    const preds = await model.detect(cam, 6, 0.35);
-    const cars = preds.filter(p => ['car', 'truck', 'bus'].includes(p.class));
-    if (cars.length) {
-      const vw = cam.videoWidth, vh = cam.videoHeight;
-      cars.sort((a, b) => score(b.bbox, vw) - score(a.bbox, vw));   // la plus grande et la plus centrale
-      const [x, y, w, h] = cars[0].bbox; det = { x, y, w, h }; detAt = performance.now();
+    let r = await findCar(correction(followsScreen));
+    const alt = correction(!followsScreen);
+    // rien trouve depuis 1,5 s et l'autre hypothese donne une autre orientation : on l'essaie
+    if (!r && performance.now() - detAt > 1500 && performance.now() - lastFlipTry > 1500 &&
+        Math.abs(((Math.round(alt / 90) - Math.round(correction(followsScreen) / 90)) % 4)) > 0) {
+      lastFlipTry = performance.now();
+      const r2 = await findCar(alt);
+      if (r2) { followsScreen = !followsScreen; r = r2; }
+    }
+    if (r) {
+      if (r.w !== UW || r.h !== UH) smooth = null;  // passage portrait <-> paysage : on repart a zero
+      rot = r.c; UW = r.w; UH = r.h;
+      det = r.box; detAt = performance.now();
     }
   } catch (e) {}
   busy = false;
@@ -312,7 +368,7 @@ function guidance() {
   const fresh = det && performance.now() - detAt < 900;
   if (!model) return { ok: false, kind: 'warn', state: 'Chargement de la détection…', tip: '' };
   if (!fresh) return { ok: false, kind: 'bad', state: 'Voiture non détectée', tip: 'Cadrez la voiture', sub: 'Entière, au centre de l’écran' };
-  const vw = cam.videoWidth, vh = cam.videoHeight;
+  const vw = UW, vh = UH;
   const fw = smooth.w / vw, cx = (smooth.x + smooth.w / 2) / vw - 0.5, cy = (smooth.y + smooth.h / 2) / vh - 0.5;
   const edge = smooth.x < vw * 0.015 || smooth.x + smooth.w > vw * 0.985 || smooth.y < vh * 0.015 || smooth.y + smooth.h > vh * 0.985;
   if (edge || fw > 0.9) return { ok: false, kind: 'warn', state: 'Trop près', tip: 'Reculez un peu', sub: 'La voiture doit tenir entière' };
@@ -330,17 +386,17 @@ const grab = document.createElement('canvas');
 let shotQ = new Array(N).fill(-1);
 function takeShot(i, q = 2) {
   shotQ[i] = q;
-  grab.width = cam.videoWidth; grab.height = cam.videoHeight;
-  grab.getContext('2d').drawImage(cam, 0, 0);
+  const c = correction(followsScreen), [gw, gh] = geom(c), sc = Math.min(1, 1280 / Math.max(gw, gh));
+  drawUpright(grab, c, sc);
   const m = { index: i, angle: i * STEP, heading: heading == null ? null : +heading.toFixed(1), t: +((performance.now() - t0) / 1000).toFixed(2),
-    q, box: smooth && q > 0 ? [smooth.x, smooth.y, smooth.w, smooth.h].map(v => Math.round(v)) : null, video: [cam.videoWidth, cam.videoHeight], speed: Math.round(speed) };
+    q, box: smooth && q > 0 ? [smooth.x, smooth.y, smooth.w, smooth.h].map(v => Math.round(v * sc)) : null, video: [grab.width, grab.height], tilt: +c.toFixed(1), speed: Math.round(speed) };
   if (!(shots[i] instanceof Blob)) shots[i] = 'pending';
   grab.toBlob(b => {
     if (b && shotQ[i] === q) { shots[i] = b; meta[i] = m; }
     else if (shots[i] === 'pending') shots[i] = null;
     paintRing();
     if (navigator.vibrate) navigator.vibrate(8);
-  }, 'image/jpeg', 0.92);
+  }, 'image/jpeg', 0.88);
 }
 
 /* ---------- boucle d'affichage ---------- */
@@ -379,12 +435,14 @@ function draw(gd) {
   if (!smooth || !cam.videoWidth || performance.now() - detAt > 900) return;
   const s = Math.max(r.width / cam.videoWidth, r.height / cam.videoHeight);       // video en object-fit: cover
   const ox = (r.width - cam.videoWidth * s) / 2, oy = (r.height - cam.videoHeight * s) / 2;
-  const x = ox + smooth.x * s, y = oy + smooth.y * s, w = smooth.w * s, h = smooth.h * s;
-  const col = gd.ok ? '#65DEF1' : '#F17F29', L = Math.min(w, h) * 0.18;
-  g.strokeStyle = col; g.lineWidth = 4; g.lineCap = 'round';
+  // le cadre est calcule dans l'image redressee, puis reporte sur l'ecran (il peut donc etre incline)
+  const P = (ux, uy) => { const [vx, vy] = toVideo(ux, uy); return [ox + vx * s, oy + vy * s]; };
+  const x = smooth.x, y = smooth.y, w = smooth.w, h = smooth.h, L = Math.min(w, h) * 0.18;
+  const col = gd.ok ? '#65DEF1' : '#F17F29';
+  g.strokeStyle = col; g.lineWidth = 4; g.lineCap = 'round'; g.lineJoin = 'round';
   g.beginPath();
   for (const [cx, cy, dx, dy] of [[x, y, 1, 1], [x + w, y, -1, 1], [x, y + h, 1, -1], [x + w, y + h, -1, -1]]) {
-    g.moveTo(cx + dx * L, cy); g.lineTo(cx, cy); g.lineTo(cx, cy + dy * L);
+    g.moveTo(...P(cx + dx * L, cy)); g.lineTo(...P(cx, cy)); g.lineTo(...P(cx, cy + dy * L));
   }
   g.stroke();
   g.strokeStyle = 'rgba(255,255,255,.55)'; g.lineWidth = 1.5;
@@ -480,6 +538,7 @@ $('cGo').onclick = () => {
   store.set('s360code', code);
   const fd = new FormData(); fd.append('code', code); fd.append('nom', nom);
   got.forEach(o => fd.append('photos', o.b, `v${String(o.i).padStart(2, '0')}.jpg`));
+  fd.append('boites', JSON.stringify(got.map(o => (meta[o.i] && meta[o.i].box) || null)));   // cadre de la voiture vue par l'appli
   $('cGo').disabled = true; $('cRes').hidden = true; cBar(0); cMsg('Envoi des photos…');
   const x = new XMLHttpRequest(); x.open('POST', API + '/creer');
   x.upload.onprogress = e => e.lengthComputable && cBar(e.loaded / e.total * 0.4);
