@@ -51,6 +51,7 @@ video, #overlay { position: absolute; inset: 0; width: 100%; height: 100%; objec
 .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--dim); flex: none; }
 .pill.ok .dot { background: var(--ok); } .pill.warn .dot { background: var(--warn); } .pill.bad .dot { background: var(--bad); }
 #timer { font: 500 13px var(--mono); }
+#diag { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(150px + env(safe-area-inset-bottom)); font: 500 12px var(--mono); color: #fff; background: rgba(0,0,0,.45); padding: 4px 10px; border-radius: 999px; white-space: nowrap; pointer-events: none; }
 #timer .dot { background: var(--rec); animation: blink 1s steps(2) infinite; }
 @keyframes blink { 50% { opacity: .2; } }
 #tip { position: absolute; left: 50%; top: 42%; transform: translate(-50%,-50%); text-align: center; font-weight: 800; font-size: 26px; line-height: 1.1;
@@ -112,7 +113,7 @@ video, #overlay { position: absolute; inset: 0; width: 100%; height: 100%; objec
   </ol>
   <button class="primary" id="go">Ouvrir la caméra</button>
   <p class="err" id="introErr" hidden></p>
-  <p class="note">Tout reste sur votre téléphone. Rien n'est envoyé. · version 2</p>
+  <p class="note">Tout reste sur votre téléphone. Rien n'est envoyé. · version 3</p>
 </section>
 
 <section id="shoot" hidden>
@@ -123,6 +124,7 @@ video, #overlay { position: absolute; inset: 0; width: 100%; height: 100%; objec
     <div class="pill" id="timer" hidden><span class="dot"></span><span id="timerTxt">0:00</span></div>
   </div>
   <div id="tip"></div>
+  <div id="diag" hidden></div>
   <div class="bottom">
     <div class="side"><span class="big" id="pct">0 %</span><span class="lbl">du tour</span></div>
     <div id="ring">
@@ -177,27 +179,41 @@ let recorder = null, chunks = [], videoBlob = null, t0 = 0, tEnd = 0, sensorless
   svg.innerHTML = h;
 })();
 function paintRing() {
-  for (let i = 0; i < N; i++) $('seg' + i).setAttribute('stroke', shots[i] ? '#3ddc97' : 'rgba(255,255,255,.22)');
+  for (let i = 0; i < N; i++) $('seg' + i).setAttribute('stroke', !shots[i] ? 'rgba(255,255,255,.22)' : shotQ[i] === 2 ? '#3ddc97' : '#ffb547');
   const n = shots.filter(Boolean).length;
   $('shots').textContent = `${n}/${N}`;
   $('pct').textContent = `${Math.round(n / N * 100)} %`;
 }
 
 /* ---------- capteurs ---------- */
+let total = 0, hist = [];
+function camHeading(e) {
+  // direction visee par la camera arriere, projetee a l'horizontale (fiable telephone debout,
+  // contrairement a la boussole qui saute quand le telephone est vertical)
+  if (e.alpha == null || e.beta == null || e.gamma == null) return null;
+  const r = Math.PI / 180, a = e.alpha * r, b = e.beta * r, g = e.gamma * r;
+  const vx = -(Math.cos(a) * Math.sin(g) + Math.sin(a) * Math.sin(b) * Math.cos(g));
+  const vy = -(Math.sin(a) * Math.sin(g) - Math.cos(a) * Math.sin(b) * Math.cos(g));
+  if (Math.hypot(vx, vy) < 0.25) return null;          // camera vers le ciel ou le sol
+  return (Math.atan2(vx, vy) / r + 360) % 360;
+}
 function onOrient(e) {
-  let h = null;
-  if (typeof e.webkitCompassHeading === 'number') h = e.webkitCompassHeading;   // iOS
-  else if (e.alpha != null) h = 360 - e.alpha;                                   // Android
+  let h = camHeading(e);
+  if (h == null && typeof e.webkitCompassHeading === 'number') h = e.webkitCompassHeading;
   if (h == null || isNaN(h)) return;
   hasSensor = true; heading = h;
   const now = performance.now();
   if (lastH != null) {
     const d = ((h - lastH + 540) % 360) - 180;
-    const dt = Math.max(1, now - lastHT) / 1000;
-    speed = speed * 0.8 + Math.abs(d / dt) * 0.2;
+    total += d;
     if (rec) unwrapped += d;
   }
   lastH = h; lastHT = now;
+  // vitesse mesuree sur ~0,7 s (et non d'un evenement a l'autre, qui ne mesurait que du bruit)
+  hist.push([now, total]);
+  while (hist.length > 2 && now - hist[0][0] > 700) hist.shift();
+  const dt = (now - hist[0][0]) / 1000;
+  speed = dt > 0.2 ? Math.abs(total - hist[0][1]) / dt : 0;
 }
 
 async function askSensors() {
@@ -258,25 +274,30 @@ function guidance() {
   const vw = cam.videoWidth, vh = cam.videoHeight;
   const fw = smooth.w / vw, cx = (smooth.x + smooth.w / 2) / vw - 0.5, cy = (smooth.y + smooth.h / 2) / vh - 0.5;
   const edge = smooth.x < vw * 0.015 || smooth.x + smooth.w > vw * 0.985 || smooth.y < vh * 0.015 || smooth.y + smooth.h > vh * 0.985;
-  if (vh > vw) return { ok: false, kind: 'warn', state: 'Voiture détectée', tip: 'Tournez le téléphone', sub: 'À l’horizontale' };
   if (edge || fw > 0.9) return { ok: false, kind: 'warn', state: 'Trop près', tip: 'Reculez un peu', sub: 'La voiture doit tenir entière' };
   if (fw < 0.42) return { ok: false, kind: 'warn', state: 'Trop loin', tip: 'Approchez-vous', sub: 'La voiture doit remplir l’écran' };
   if (Math.abs(cx) > 0.14) return { ok: false, kind: 'warn', state: 'Décentrée', tip: cx > 0 ? 'Visez plus à droite' : 'Visez plus à gauche', sub: 'Voiture au centre' };
   if (Math.abs(cy) > 0.18) return { ok: false, kind: 'warn', state: 'Décentrée', tip: cy > 0 ? 'Visez plus bas' : 'Visez plus haut', sub: '' };
-  if (rec && hasSensor && speed > 28) return { ok: false, kind: 'warn', state: 'Trop rapide', tip: 'Plus lentement', sub: 'Environ 40 s pour le tour' };
+  if (rec && hasSensor && speed > 45) return { ok: false, kind: 'warn', state: 'Trop rapide', tip: 'Plus lentement', sub: 'Environ 40 s pour le tour' };
+  if (rec && hasSensor && speed > 25) return { ok: true, kind: 'ok', state: 'Voiture bien cadrée', tip: 'Un peu plus lentement', sub: '' };
+  if (!rec && vh > vw) return { ok: true, kind: 'ok', state: 'Voiture bien cadrée', tip: 'Appuyez pour commencer', sub: 'Conseil : téléphone à l’horizontale' };
   return { ok: true, kind: 'ok', state: 'Voiture bien cadrée', tip: rec ? '' : 'Appuyez pour commencer', sub: rec ? '' : 'Placez-vous face à l’avant' };
 }
 
 /* ---------- capture d'une photo ---------- */
 const grab = document.createElement('canvas');
-function takeShot(i) {
+let shotQ = new Array(N).fill(-1);
+function takeShot(i, q = 2) {
+  shotQ[i] = q;
   grab.width = cam.videoWidth; grab.height = cam.videoHeight;
   grab.getContext('2d').drawImage(cam, 0, 0);
   const m = { index: i, angle: i * STEP, heading: heading == null ? null : +heading.toFixed(1), t: +((performance.now() - t0) / 1000).toFixed(2),
-    box: smooth ? [smooth.x, smooth.y, smooth.w, smooth.h].map(v => Math.round(v)) : null, video: [cam.videoWidth, cam.videoHeight], speed: Math.round(speed) };
-  shots[i] = 'pending';
+    q, box: smooth && q > 0 ? [smooth.x, smooth.y, smooth.w, smooth.h].map(v => Math.round(v)) : null, video: [cam.videoWidth, cam.videoHeight], speed: Math.round(speed) };
+  if (!(shots[i] instanceof Blob)) shots[i] = 'pending';
   grab.toBlob(b => {
-    shots[i] = b; meta[i] = m; paintRing();
+    if (b && shotQ[i] === q) { shots[i] = b; meta[i] = m; }
+    else if (shots[i] === 'pending') shots[i] = null;
+    paintRing();
     if (navigator.vibrate) navigator.vibrate(8);
   }, 'image/jpeg', 0.92);
 }
@@ -301,8 +322,10 @@ function loop() {
       // angle parcouru : boussole si dispo, sinon le temps (tour de 40 s)
       const turned = hasSensor && !sensorless ? Math.abs(unwrapped) : el / 40 * 360;
       const i = Math.floor(turned / STEP);
-      if (gd.ok && i >= 0 && i < N && !shots[i]) takeShot(i);
-      if (turned >= 360 + STEP / 2 || shots.every(Boolean)) finish();
+      const q = gd.ok ? 2 : (det && now - detAt < 900 ? 1 : 0);   // 2 bien cadree, 1 voiture vue, 0 rien
+      if (i >= 0 && i < N && q > shotQ[i]) takeShot(i, q);
+      $('diag').textContent = `${Math.round(turned)}° · ${hasSensor && !sensorless ? 'gyroscope' : 'chrono 40 s'} · ${model ? (q ? 'voiture vue' : 'pas de voiture') : 'détection absente'}`;
+      if (turned >= 360 + STEP / 2 || shotQ.every(v => v === 2)) finish();
     }
   }
   requestAnimationFrame(loop);
@@ -332,8 +355,8 @@ function draw(gd) {
 $('shutter').onclick = () => rec ? finish() : start();
 $('stopBtn').onclick = () => finish();
 function start() {
-  shots = new Array(N).fill(null); meta = []; paintRing();
-  rec = true; unwrapped = 0; t0 = performance.now(); sensorless = !hasSensor;
+  shots = new Array(N).fill(null); shotQ = new Array(N).fill(-1); meta = []; paintRing();
+  rec = true; $('diag').hidden = false; unwrapped = 0; t0 = performance.now(); sensorless = !hasSensor;
   $('shutter').classList.add('rec'); $('shutter').setAttribute('aria-label', 'Arrêter');
   $('timer').hidden = false; $('stopBtn').hidden = false;
   chunks = []; videoBlob = null;
@@ -349,7 +372,7 @@ function finish() {
   if (!rec) return;
   rec = false; tEnd = performance.now();
   $('shutter').classList.remove('rec'); $('shutter').setAttribute('aria-label', 'Démarrer la prise de vue');
-  $('timer').hidden = true; $('stopBtn').hidden = true;
+  $('timer').hidden = true; $('stopBtn').hidden = true; $('diag').hidden = true;
   try { recorder && recorder.state !== 'inactive' && recorder.stop(); } catch (e) {}
   // on passe tout de suite a l'ecran de fin ; les dernieres photos en cours d'enregistrement suivent
   showDone().catch(showError);
@@ -416,7 +439,7 @@ async function showDone() {
   if (!got.length) {
     img.removeAttribute('src');
     hint.textContent = 'Aucune photo prise';
-    $('saveNote').textContent = 'Les photos ne se prennent que quand le cadre est vert (voiture entière et au centre). Appuyez sur Recommencer.';
+    $('saveNote').textContent = 'Aucune photo : l’enregistrement a été arrêté trop tôt. Appuyez sur Recommencer.';
     return;
   }
   // photos brutes tout de suite, remplacees par les versions stabilisees au fur et a mesure
@@ -454,7 +477,7 @@ $('saveVideo').onclick = () => {
   const ext = videoBlob.type.includes('mp4') ? 'mp4' : 'webm';
   share([new File([videoBlob], `360_video.${ext}`, { type: videoBlob.type })]);
 };
-$('again').onclick = () => { $('done').hidden = true; $('shoot').hidden = false; $('errBox').hidden = true; $('savePhotos').hidden = false; shots = new Array(N).fill(null); meta = []; paintRing(); };
+$('again').onclick = () => { $('done').hidden = true; $('shoot').hidden = false; $('errBox').hidden = true; $('savePhotos').hidden = false; shots = new Array(N).fill(null); shotQ = new Array(N).fill(-1); meta = []; paintRing(); };
 </script>
 </body>
 </html>
