@@ -4,45 +4,65 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#0b0d10">
+<meta name="theme-color" content="#DCE2C8">
 <title>Studio 360</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%2713%27 fill=%27none%27 stroke=%27%233ddc97%27 stroke-width=%274%27/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%2713%27 fill=%27none%27 stroke=%27%23F96900%27 stroke-width=%274%27/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=JetBrains+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap">
 <style>
 /* Ecran plein camera ; HUD aux bords, anneau de progression en bas */
 :root {
-  --bg: #0b0d10; --ink: #f2f4f7; --dim: #9aa3ae; --line: rgba(255,255,255,.16);
-  --ok: #3ddc97; --warn: #ffb547; --bad: #ff5d5d; --rec: #ff3b30; --glass: rgba(11,13,16,.62);
-  --display: "Archivo", system-ui, sans-serif; --mono: "JetBrains Mono", ui-monospace, monospace;
-  color-scheme: dark;
+  /* palette : Electric Aqua, Pearl Aqua, Beige, Pumpkin Spice, Harvest Orange */
+  --aqua: #65DEF1; --pearl: #A8DCD1; --beige: #DCE2C8; --pumpkin: #F96900; --harvest: #F17F29;
+  --bg: #EEF1E4; --card: #FFFFFF; --ink: #15323A; --dim: #4D6469; --line: rgba(21,50,58,.14);
+  --ok: var(--aqua); --warn: var(--harvest); --bad: var(--pumpkin); --rec: var(--pumpkin); --glass: rgba(21,50,58,.62);
+  --hud: #FFFFFF;
+  --display: "Poppins", system-ui, sans-serif; --mono: "Poppins", system-ui, sans-serif;
+  color-scheme: light;
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { height: 100%; margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 var(--display); overflow: hidden; }
 button { font: inherit; color: inherit; border: 0; cursor: pointer; }
-button:focus-visible { outline: 2px solid var(--ok); outline-offset: 3px; }
+button:focus-visible { outline: 2px solid var(--pumpkin); outline-offset: 3px; }
 [hidden] { display: none !important; }
 
 /* ---------- accueil ---------- */
 #intro { position: fixed; inset: 0; overflow-y: auto; padding: calc(env(safe-area-inset-top,0px) + 28px) max(20px, env(safe-area-inset-right,0px)) calc(env(safe-area-inset-bottom,0px) + 28px) max(20px, env(safe-area-inset-left,0px));
   display: flex; flex-direction: column; gap: 22px; max-width: 520px; margin: 0 auto; }
-.kicker { font: 500 11px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
-h1 { font-weight: 800; font-size: 40px; line-height: 1; margin: 6px 0 0; letter-spacing: -.02em; text-wrap: balance; }
+.kicker { font: 600 11px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: #C25200; }
+h1 { font-weight: 800; font-size: 40px; line-height: 1.05; margin: 6px 0 0; letter-spacing: -.02em; color: var(--ink); text-wrap: balance; }
 .lead { color: var(--dim); margin: 0; }
 .steps { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; counter-reset: s; }
-.steps li { counter-increment: s; display: grid; grid-template-columns: 34px 1fr; gap: 12px; align-items: start; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; }
-.steps li::before { content: counter(s); font: 500 13px var(--mono); width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: rgba(255,255,255,.08); }
+.steps li { counter-increment: s; display: grid; grid-template-columns: 34px 1fr; gap: 12px; align-items: start; padding: 12px 14px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; }
+.steps li::before { content: counter(s); font: 500 13px var(--mono); width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--aqua); color: var(--ink); font-weight: 700; }
 .steps b { display: block; font-weight: 700; }
 .steps span { color: var(--dim); font-size: 14px; }
-.diagram { align-self: center; width: 210px; max-width: 100%; }
+.diagram { align-self: center; flex: none; width: 210px; height: 170px; max-width: 100%; }
 .diagram text { font: 500 10px var(--mono); fill: var(--dim); }
-.primary { background: var(--ink); color: var(--bg); font-weight: 700; font-size: 17px; padding: 16px 20px; border-radius: 999px; }
+.primary { background: var(--pumpkin); color: var(--ink); font-weight: 700; box-shadow: 0 6px 18px rgba(249,105,0,.28); font-size: 17px; padding: 16px 20px; border-radius: 999px; }
 .primary:disabled { opacity: .5; }
+/* bouton « Flow » : un disque s'ouvre depuis le centre, les fleches changent de cote */
+.flow { position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; gap: 4px;
+  background: transparent; color: var(--ink); box-shadow: none; border: 1.5px solid rgba(21,50,58,.4); border-radius: 100px;
+  transition: border-color .6s cubic-bezier(.23,1,.32,1), color .6s cubic-bezier(.23,1,.32,1), border-radius .6s cubic-bezier(.23,1,.32,1), transform .2s; }
+.flow .txt { position: relative; z-index: 1; transform: translateX(-12px); transition: transform .8s ease-out; }
+.flow .circle { position: absolute; top: 50%; left: 50%; width: 16px; height: 16px; transform: translate(-50%,-50%); border-radius: 50%;
+  background: var(--ink); opacity: 0; transition: width .8s cubic-bezier(.19,1,.22,1), height .8s cubic-bezier(.19,1,.22,1), opacity .8s cubic-bezier(.19,1,.22,1); }
+.flow .arr { position: absolute; z-index: 9; width: 18px; height: 18px; fill: none; stroke: var(--pumpkin); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round;
+  transition: left .8s cubic-bezier(.34,1.56,.64,1), right .8s cubic-bezier(.34,1.56,.64,1), stroke .8s; }
+.flow .a2 { left: -25%; } .flow .a1 { right: 20px; }
+.flow:not(:disabled):is(:hover, :focus-visible, :active) { border-color: transparent; color: #fff; border-radius: 14px; }
+.flow:not(:disabled):is(:hover, :focus-visible, :active) .txt { transform: translateX(12px); }
+.flow:not(:disabled):is(:hover, :focus-visible, :active) .circle { width: 700px; height: 700px; opacity: 1; }
+.flow:not(:disabled):is(:hover, :focus-visible, :active) .a2 { left: 20px; stroke: var(--harvest); }
+.flow:not(:disabled):is(:hover, :focus-visible, :active) .a1 { right: -25%; }
+.flow:active { transform: scale(.95); }
+@media (hover: none) { .flow .txt { transform: none; } }
 .note { font-size: 13px; color: var(--dim); text-align: center; margin: 0; }
-.err { color: var(--bad); text-align: center; margin: 0; }
+.err { color: #B84D00; text-align: center; margin: 0; }
 
 /* ---------- prise de vue ---------- */
-#shoot { position: fixed; inset: 0; }
+#shoot { position: fixed; inset: 0; background: #000; color: var(--hud); }
 video, #overlay { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 #overlay { pointer-events: none; }
 .top { position: absolute; left: 0; right: 0; top: 0; padding: calc(env(safe-area-inset-top,0px) + 12px) max(14px, env(safe-area-inset-right,0px)) 0 max(14px, env(safe-area-inset-left,0px));
@@ -61,28 +81,28 @@ video, #overlay { position: absolute; inset: 0; width: 100%; height: 100%; objec
   display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; }
 #ring { width: 132px; height: 132px; position: relative; }
 #ring svg { position: absolute; inset: 0; }
-#shutter { position: absolute; inset: 24px; border-radius: 50%; background: var(--ink); display: grid; place-items: center; transition: transform .15s, border-radius .2s, inset .2s, background .2s; }
-#shutter.rec { inset: 42px; border-radius: 12px; background: var(--rec); }
+#shutter { position: absolute; inset: 24px; border-radius: 50%; background: var(--hud); box-shadow: 0 0 0 3px var(--pumpkin) inset; display: grid; place-items: center; transition: transform .15s, border-radius .2s, inset .2s, background .2s; }
+#shutter.rec { inset: 42px; border-radius: 12px; background: var(--rec); box-shadow: none; }
 #shutter:active { transform: scale(.94); }
 .side { display: flex; flex-direction: column; gap: 2px; text-shadow: 0 1px 8px rgba(0,0,0,.6); }
 .side.r { align-items: flex-end; text-align: right; }
 .big { font-weight: 800; font-size: 26px; font-variant-numeric: tabular-nums; line-height: 1; }
-.lbl { font: 500 10px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ink); opacity: .8; }
+.lbl { font: 500 10px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: inherit; opacity: .85; }
 .ghost { touch-action: manipulation; min-height: 40px; background: var(--glass); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); padding: 8px 12px; border-radius: 999px; font-size: 13px; font-weight: 700; margin-top: 6px; }
 
 /* ---------- ecran de fin ---------- */
-#done { position: fixed; inset: 0; overflow-y: auto; background: var(--bg); padding: calc(env(safe-area-inset-top,0px) + 24px) max(20px, env(safe-area-inset-right,0px)) calc(env(safe-area-inset-bottom,0px) + 24px) max(20px, env(safe-area-inset-left,0px)); }
+#done { position: fixed; inset: 0; overflow-y: auto; background: var(--bg); color: var(--ink); padding: calc(env(safe-area-inset-top,0px) + 24px) max(20px, env(safe-area-inset-right,0px)) calc(env(safe-area-inset-bottom,0px) + 24px) max(20px, env(safe-area-inset-left,0px)); }
 #done .wrap { max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
-#spin { position: relative; border-radius: 14px; overflow: hidden; background: #000; aspect-ratio: 4/3; max-width: 100%; max-height: 70vh; touch-action: none; cursor: grab; }
+#spin { position: relative; border-radius: 16px; overflow: hidden; background: var(--beige); aspect-ratio: 4/3; max-width: 100%; max-height: 70vh; touch-action: none; cursor: grab; }
 #spin img { width: 100%; height: 100%; object-fit: contain; display: block; user-select: none; -webkit-user-drag: none; }
-#spin .hint { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); font: 500 11px var(--mono); background: var(--glass); padding: 5px 10px; border-radius: 999px; pointer-events: none; }
+#spin .hint { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); font: 500 11px var(--mono); color: #fff; background: var(--glass); padding: 5px 10px; border-radius: 999px; pointer-events: none; }
 .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-.stats div { border: 1px solid var(--line); border-radius: 12px; padding: 12px; min-width: 0; }
+.stats div { background: var(--card); border: 1px solid var(--line); border-top: 3px solid var(--aqua); border-radius: 12px; padding: 12px; min-width: 0; }
 .stats .big { font-size: 22px; }
 .actions { display: grid; gap: 10px; }
-.secondary { background: rgba(255,255,255,.08); font-weight: 700; padding: 14px 18px; border-radius: 999px; }
+.secondary { background: var(--pearl); color: var(--ink); font-weight: 700; padding: 14px 18px; border-radius: 999px; }
 #errBox { position: fixed; z-index: 50; left: max(12px, env(safe-area-inset-left,0px)); right: max(12px, env(safe-area-inset-right,0px)); top: calc(env(safe-area-inset-top,0px) + 60px);
-  background: #3a1214; color: #ffd7d7; border: 1px solid var(--bad); border-radius: 12px; padding: 10px 14px; font: 500 12px var(--mono); }
+  background: #FFF1E6; color: #7A2E00; border: 1px solid var(--pumpkin); border-radius: 12px; padding: 10px 14px; font: 500 12px var(--mono); }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 </style>
 </head>
@@ -97,23 +117,23 @@ video, #overlay { position: absolute; inset: 0; width: 100%; height: 100%; objec
   </div>
   <p class="lead">L'appli repère la voiture à l'écran et vous guide pendant que vous en faites le tour. Elle garde 36 vraies photos, une tous les 10°, pour la rotation au doigt.</p>
   <svg class="diagram" viewBox="0 0 210 170" aria-hidden="true">
-    <circle cx="105" cy="85" r="66" fill="none" stroke="rgba(255,255,255,.25)" stroke-dasharray="3 5"/>
-    <rect x="78" y="62" width="54" height="46" rx="14" fill="none" stroke="#f2f4f7" stroke-width="2"/>
-    <rect x="86" y="70" width="38" height="12" rx="4" fill="rgba(255,255,255,.25)"/>
-    <path d="M150 34 A66 66 0 0 1 171 85" fill="none" stroke="#3ddc97" stroke-width="3" stroke-linecap="round"/>
-    <path d="M168 76 l3 9 l7 -6" fill="none" stroke="#3ddc97" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-    <circle cx="146" cy="30" r="6" fill="#3ddc97"/>
+    <circle cx="105" cy="85" r="66" fill="none" stroke="#A8DCD1" stroke-width="2" stroke-dasharray="3 5"/>
+    <rect x="78" y="62" width="54" height="46" rx="14" fill="none" stroke="#15323A" stroke-width="2"/>
+    <rect x="86" y="70" width="38" height="12" rx="4" fill="#65DEF1"/>
+    <path d="M150 34 A66 66 0 0 1 171 85" fill="none" stroke="#F96900" stroke-width="3" stroke-linecap="round"/>
+    <path d="M168 76 l3 9 l7 -6" fill="none" stroke="#F96900" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="146" cy="30" r="6" fill="#F96900"/>
     <text x="105" y="164" text-anchor="middle">environ 3 m · un tour complet</text>
   </svg>
   <ol class="steps">
     <li><div><b>Téléphone à l'horizontale</b><span>À hauteur de poitrine, environ 3 m de la voiture.</span></div></li>
-    <li><div><b>Commencez face à l'avant</b><span>Attendez que le cadre vert entoure la voiture, puis appuyez sur le bouton.</span></div></li>
+    <li><div><b>Commencez face à l'avant</b><span>Attendez que le cadre bleu entoure la voiture, puis appuyez sur le bouton.</span></div></li>
     <li><div><b>Tournez lentement</b><span>Gardez la voiture entière et au centre. Un tour complet prend environ 40 secondes.</span></div></li>
     <li><div><b>L'appli s'arrête seule</b><span>Quand l'anneau est plein, les 36 photos et la vidéo sont prêtes.</span></div></li>
   </ol>
-  <button class="primary" id="go">Ouvrir la caméra</button>
+  <button class="primary flow" id="go"><svg class="arr a2" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg><span class="txt">Ouvrir la caméra</span><span class="circle" aria-hidden="true"></span><svg class="arr a1" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
   <p class="err" id="introErr" hidden></p>
-  <p class="note">Tout reste sur votre téléphone. Rien n'est envoyé. · version 3</p>
+  <p class="note">Tout reste sur votre téléphone. Rien n'est envoyé. · version 4</p>
 </section>
 
 <section id="shoot" hidden>
@@ -145,7 +165,7 @@ video, #overlay { position: absolute; inset: 0; width: 100%; height: 100%; objec
       <div><span class="big" id="sTime">0 s</span><br><span class="lbl">durée</span></div>
     </div>
     <div class="actions">
-      <button class="primary" id="savePhotos">Enregistrer les 36 photos</button>
+      <button class="primary flow" id="savePhotos"><svg class="arr a2" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg><span class="txt">Enregistrer les 36 photos</span><span class="circle" aria-hidden="true"></span><svg class="arr a1" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
       <button class="secondary" id="saveVideo">Enregistrer la vidéo</button>
       <button class="secondary" id="again">Recommencer</button>
     </div>
@@ -174,12 +194,12 @@ let recorder = null, chunks = [], videoBlob = null, t0 = 0, tEnd = 0, sensorless
   for (let i = 0; i < N; i++) {
     const a0 = (i * STEP - 90 + 1.4) * Math.PI / 180, a1 = ((i + 1) * STEP - 90 - 1.4) * Math.PI / 180, r = 60;
     const p = (a) => `${66 + r * Math.cos(a)} ${66 + r * Math.sin(a)}`;
-    h += `<path id="seg${i}" d="M${p(a0)} A${r} ${r} 0 0 1 ${p(a1)}" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="7" stroke-linecap="round"/>`;
+    h += `<path id="seg${i}" d="M${p(a0)} A${r} ${r} 0 0 1 ${p(a1)}" fill="none" stroke="rgba(255,255,255,.28)" stroke-width="7" stroke-linecap="round"/>`;
   }
   svg.innerHTML = h;
 })();
 function paintRing() {
-  for (let i = 0; i < N; i++) $('seg' + i).setAttribute('stroke', !shots[i] ? 'rgba(255,255,255,.22)' : shotQ[i] === 2 ? '#3ddc97' : '#ffb547');
+  for (let i = 0; i < N; i++) $('seg' + i).setAttribute('stroke', !shots[i] ? 'rgba(255,255,255,.28)' : shotQ[i] === 2 ? '#65DEF1' : '#F17F29');
   const n = shots.filter(Boolean).length;
   $('shots').textContent = `${n}/${N}`;
   $('pct').textContent = `${Math.round(n / N * 100)} %`;
@@ -339,7 +359,7 @@ function draw(gd) {
   const s = Math.max(r.width / cam.videoWidth, r.height / cam.videoHeight);       // video en object-fit: cover
   const ox = (r.width - cam.videoWidth * s) / 2, oy = (r.height - cam.videoHeight * s) / 2;
   const x = ox + smooth.x * s, y = oy + smooth.y * s, w = smooth.w * s, h = smooth.h * s;
-  const col = gd.ok ? '#3ddc97' : '#ffb547', L = Math.min(w, h) * 0.18;
+  const col = gd.ok ? '#65DEF1' : '#F17F29', L = Math.min(w, h) * 0.18;
   g.strokeStyle = col; g.lineWidth = 4; g.lineCap = 'round';
   g.beginPath();
   for (const [cx, cy, dx, dy] of [[x, y, 1, 1], [x + w, y, -1, 1], [x, y + h, 1, -1], [x + w, y + h, -1, -1]]) {
@@ -405,7 +425,7 @@ async function stabilise(list, onFrame) {
     const { b, m } = list[k];
     try {
       const { im, u } = await loadImg(b);
-      x.fillStyle = '#0b0d10'; x.fillRect(0, 0, OW, OH);
+      x.fillStyle = '#DCE2C8'; x.fillRect(0, 0, OW, OH);
       if (m && m.box) {
         const near = [-2, -1, 0, 1, 2].map(d => hs[(k + d + list.length) % list.length]).filter(Boolean).sort((a, b) => a - b);
         const h = near[Math.floor(near.length / 2)];
@@ -431,7 +451,7 @@ async function showDone() {
   const got = shots.map((b, i) => b instanceof Blob && { b, i, m: meta[i] }).filter(Boolean);
   $('sShots').textContent = got.length; $('sCover').textContent = `${got.length * STEP}°`;
   $('sTime').textContent = `${Math.max(0, Math.round((tEnd - t0) / 1000))} s`;
-  $('savePhotos').textContent = `Enregistrer les ${got.length} photos`;
+  $('savePhotos').querySelector('.txt').textContent = `Enregistrer les ${got.length} photos`;
   $('savePhotos').hidden = !got.length;
   $('shoot').hidden = true; $('done').hidden = false;
   const img = $('spinImg'), hint = $('spin').querySelector('.hint');
