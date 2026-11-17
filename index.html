@@ -103,6 +103,15 @@ video, #overlay { position: absolute; inset: 0; width: 100%; height: 100%; objec
 .secondary { background: var(--pearl); color: var(--ink); font-weight: 700; padding: 14px 18px; border-radius: 999px; }
 #errBox { position: fixed; z-index: 50; left: max(12px, env(safe-area-inset-left,0px)); right: max(12px, env(safe-area-inset-right,0px)); top: calc(env(safe-area-inset-top,0px) + 60px);
   background: #FFF1E6; color: #7A2E00; border: 1px solid var(--pumpkin); border-radius: 12px; padding: 10px 14px; font: 500 12px var(--mono); }
+.cloud { background: var(--card); border: 1px solid var(--line); border-top: 3px solid var(--pumpkin); border-radius: 16px; padding: 16px; display: grid; gap: 12px; }
+.cloud label { display: grid; gap: 4px; font-weight: 600; font-size: 13px; }
+.cloud input { font: 500 16px var(--display); color: var(--ink); background: var(--bg); border: 1.5px solid var(--line); border-radius: 12px; padding: 12px 14px; min-width: 0; }
+.cloud input:focus { outline: none; border-color: var(--aqua); box-shadow: 0 0 0 3px rgba(101,222,241,.35); }
+.cBar { height: 8px; background: var(--beige); border-radius: 99px; overflow: hidden; }
+.cBar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--aqua), var(--pearl)); border-radius: 99px; transition: width .4s; }
+.cRes { display: grid; gap: 10px; }
+.cRes a { display: block; text-align: center; text-decoration: none; background: var(--ink); color: #fff; font-weight: 700; padding: 15px 18px; border-radius: 999px; }
+#cMsg.bad { color: #B84D00; font-weight: 600; }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 </style>
 </head>
@@ -133,7 +142,7 @@ video, #overlay { position: absolute; inset: 0; width: 100%; height: 100%; objec
   </ol>
   <button class="primary flow" id="go"><svg class="arr a2" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg><span class="txt">Ouvrir la caméra</span><span class="circle" aria-hidden="true"></span><svg class="arr a1" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
   <p class="err" id="introErr" hidden></p>
-  <p class="note">Tout reste sur votre téléphone. Rien n'est envoyé. · version 5</p>
+  <p class="note">Tout reste sur votre téléphone. Rien n'est envoyé. · version 6</p>
 </section>
 
 <section id="shoot" hidden>
@@ -163,6 +172,18 @@ video, #overlay { position: absolute; inset: 0; width: 100%; height: 100%; objec
       <div><span class="big" id="sShots">0</span><br><span class="lbl">photos</span></div>
       <div><span class="big" id="sCover">0°</span><br><span class="lbl">couverts</span></div>
       <div><span class="big" id="sTime">0 s</span><br><span class="lbl">durée</span></div>
+    </div>
+    <div class="cloud" id="cloud">
+      <div><div class="kicker">Page 360 en ligne</div><p class="lead" style="margin-top:4px">Le serveur détoure la voiture, floute la plaque et crée la page à partager. Environ 1 minute.</p></div>
+      <label>Nom de la voiture<input id="cNom" maxlength="60" placeholder="Ex. Dacia Sandero 2023" autocomplete="off"></label>
+      <label>Code d'accès<input id="cCode" maxlength="20" placeholder="S360-XXXXXX" autocomplete="off" autocapitalize="characters" spellcheck="false"></label>
+      <button class="primary flow" id="cGo"><svg class="arr a2" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg><span class="txt">Créer mon 360</span><span class="circle" aria-hidden="true"></span><svg class="arr a1" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
+      <div class="cBar" id="cBar" hidden><i id="cFill"></i></div>
+      <p class="note" id="cMsg" hidden></p>
+      <div class="cRes" id="cRes" hidden>
+        <a id="cLink" target="_blank" rel="noopener">Ouvrir la page 360</a>
+        <button class="secondary" id="cShare">Partager le lien</button>
+      </div>
     </div>
     <div class="actions">
       <button class="primary flow" id="savePhotos"><svg class="arr a2" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg><span class="txt">Enregistrer les 36 photos</span><span class="circle" aria-hidden="true"></span><svg class="arr a1" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
@@ -443,6 +464,55 @@ async function stabilise(list, onFrame) {
   }
 }
 
+/* ---------- page 360 en ligne (serveur Modal) ---------- */
+const API = 'https://hatimdaifa--studio360.us-east.modal.run';
+const store = { get: k => { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } },
+                set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} } };
+$('cCode').value = store.get('s360code');
+function cMsg(t, bad) { const m = $('cMsg'); m.textContent = t; m.hidden = !t; m.className = 'note' + (bad ? ' bad' : ''); }
+function cBar(f) { $('cBar').hidden = f == null; $('cFill').style.width = Math.round((f || 0) * 100) + '%'; }
+function resetCloud() { $('cGo').disabled = false; $('cGo').hidden = false; $('cRes').hidden = true; cBar(null); cMsg(''); }
+$('cGo').onclick = () => {
+  const code = $('cCode').value.trim().toUpperCase(), nom = $('cNom').value.trim() || 'Ma voiture';
+  const got = shots.map((b, i) => b instanceof Blob && { b, i }).filter(Boolean);
+  if (!code) { cMsg('Saisissez votre code d’accès.', true); $('cCode').focus(); return; }
+  if (got.length < 4) { cMsg('Il faut au moins 4 photos. Recommencez la prise de vue.', true); return; }
+  store.set('s360code', code);
+  const fd = new FormData(); fd.append('code', code); fd.append('nom', nom);
+  got.forEach(o => fd.append('photos', o.b, `v${String(o.i).padStart(2, '0')}.jpg`));
+  $('cGo').disabled = true; $('cRes').hidden = true; cBar(0); cMsg('Envoi des photos…');
+  const x = new XMLHttpRequest(); x.open('POST', API + '/creer');
+  x.upload.onprogress = e => e.lengthComputable && cBar(e.loaded / e.total * 0.4);
+  x.onerror = () => { cMsg('Envoi impossible. Vérifiez la connexion internet, puis réessayez.', true); $('cGo').disabled = false; cBar(null); };
+  x.onload = () => {
+    let r = {}; try { r = JSON.parse(x.responseText); } catch (e) {}
+    if (x.status !== 200) { cMsg(x.status === 403 ? 'Code d’accès invalide.' : (r.detail || 'Erreur ' + x.status), true); $('cGo').disabled = false; cBar(null); return; }
+    suivre(r.id);
+  };
+  x.send(fd);
+};
+async function suivre(id) {
+  const t0 = performance.now();
+  for (;;) {
+    await new Promise(r => setTimeout(r, 2500));
+    let e; try { e = await (await fetch(`${API}/etat/${id}`, { cache: 'no-store' })).json(); } catch (_) { continue; }
+    const el = (performance.now() - t0) / 1000;
+    cBar(0.4 + 0.58 * Math.min(1, el / 70));
+    if (e.etat === 'pret') {
+      cBar(1); cMsg(`Prête : ${e.vues} vues, créée en ${e.duree} s.`);
+      const url = `${API}/v/${id}`; $('cLink').href = url; $('cRes').hidden = false; $('cGo').hidden = true;
+      $('cShare').onclick = async () => {
+        try { if (navigator.share) { await navigator.share({ title: $('cNom').value || 'Ma voiture', url }); return; } } catch (err) { if (err.name === 'AbortError') return; }
+        try { await navigator.clipboard.writeText(url); cMsg('Lien copié.'); } catch (_) { cMsg(url); }
+      };
+      return;
+    }
+    if (e.etat === 'erreur') { cMsg(e.etape || 'Erreur serveur.', true); $('cGo').disabled = false; cBar(null); return; }
+    cMsg(e.etape === 'En file d\'attente' ? 'Démarrage du serveur…' : e.etape);
+    if (el > 600) { cMsg('Le serveur met trop de temps. Réessayez dans un instant.', true); $('cGo').disabled = false; return; }
+  }
+}
+
 /* ---------- ecran de fin ---------- */
 let urls = [];
 async function showDone() {
@@ -452,7 +522,7 @@ async function showDone() {
   $('sShots').textContent = got.length; $('sCover').textContent = `${got.length * STEP}°`;
   $('sTime').textContent = `${Math.max(0, Math.round((tEnd - t0) / 1000))} s`;
   $('savePhotos').querySelector('.txt').textContent = `Enregistrer les ${got.length} photos`;
-  $('savePhotos').hidden = !got.length;
+  $('savePhotos').hidden = !got.length; $('cloud').hidden = got.length < 4; resetCloud();
   $('shoot').hidden = true; $('done').hidden = false;
   const img = $('spinImg'), hint = $('spin').querySelector('.hint');
   urls.forEach(u => u && URL.revokeObjectURL(u));
