@@ -32,6 +32,10 @@ button:focus-visible { outline: 2px solid var(--pumpkin); outline-offset: 3px; }
 .kicker { font: 600 11px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: #C25200; }
 h1 { font-weight: 800; font-size: 40px; line-height: 1.05; margin: 6px 0 0; letter-spacing: -.02em; color: var(--ink); text-wrap: balance; }
 .lead { color: var(--dim); margin: 0; }
+.modes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.modes button { font: 600 14px var(--font, inherit); padding: 12px 10px; border-radius: 14px; border: 1.5px solid var(--line); background: var(--card); color: inherit; text-align: left; line-height: 1.25; }
+.modes button small { display: block; font-weight: 500; font-size: 12px; opacity: .7; margin-top: 3px; }
+.modes button[aria-pressed="true"] { border-color: var(--aqua); box-shadow: 0 0 0 2px var(--aqua) inset; }
 .steps { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; counter-reset: s; }
 .steps li { counter-increment: s; display: grid; grid-template-columns: 34px 1fr; gap: 12px; align-items: start; padding: 12px 14px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; }
 .steps li::before { content: counter(s); font: 500 13px var(--mono); width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--aqua); color: var(--ink); font-weight: 700; }
@@ -136,15 +140,19 @@ video, #overlay { position: absolute; inset: 0; width: 100%; height: 100%; objec
     <circle cx="146" cy="30" r="6" fill="#F96900"/>
     <text x="105" y="164" text-anchor="middle">environ 3 m · un tour complet</text>
   </svg>
+  <div class="modes" role="group" aria-label="Mode de prise de vue">
+    <button id="mStudio" aria-pressed="true">Qualité studio<small>36 arrêts, photos nettes · 2-3 min</small></button>
+    <button id="mRapide" aria-pressed="false">Tour rapide<small>En marchant · 40 s</small></button>
+  </div>
   <ol class="steps">
     <li><div><b>Portrait ou paysage</b><span>À hauteur de poitrine. Paysage de préférence ; passez en portrait si vous manquez de recul, l’appli suit.</span></div></li>
     <li><div><b>Commencez face à l'avant</b><span>Attendez que le cadre bleu entoure la voiture, puis appuyez sur le bouton.</span></div></li>
-    <li><div><b>Tournez lentement</b><span>Gardez la voiture entière et au centre. Un tour complet prend environ 40 secondes.</span></div></li>
-    <li><div><b>L'appli s'arrête seule</b><span>Quand l'anneau est plein, les 72 photos et la vidéo sont prêtes.</span></div></li>
+    <li><div><b id="st3t">Avancez de repère en repère</b><span id="st3">À chaque repère, l’appli affiche « Stop » : ne bougez plus, la photo part toute seule. Gardez la voiture entre les deux traits pointillés.</span></div></li>
+    <li><div><b>L'appli s'arrête seule</b><span id="st4">Quand l'anneau est plein, les 36 photos sont prêtes.</span></div></li>
   </ol>
   <button class="primary flow" id="go"><svg class="arr a2" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg><span class="txt">Ouvrir la caméra</span><span class="circle" aria-hidden="true"></span><svg class="arr a1" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
   <p class="err" id="introErr" hidden></p>
-  <p class="note">Rien n'est envoyé sans votre accord : seul le bouton « Créer mon 360 » envoie les photos. · version 12</p>
+  <p class="note">Rien n'est envoyé sans votre accord : seul le bouton « Créer mon 360 » envoie les photos. · version 13</p>
 </section>
 
 <section id="shoot" hidden>
@@ -201,6 +209,25 @@ video, #overlay { position: absolute; inset: 0; width: 100%; height: 100%; objec
 <script>
 const $ = (id) => document.getElementById(id);
 const N = 72, STEP = 360 / N;
+let studio = true;                      // mode qualite studio : arret a chaque repere de 10 deg, photo a l'immobilite
+let still0 = 0, refH = null;            // debut de l'immobilite ; hauteur de la voiture a la 1re photo (distance de reference)
+const PAS = () => studio ? 2 : 1;       // studio : une case sur deux (36 photos)
+let clic = null;
+function declic() {                     // petit bruit d'obturateur (l'iPhone ne vibre pas depuis une page web)
+  try {
+    clic = clic || new (window.AudioContext || window.webkitAudioContext)();
+    const o = clic.createOscillator(), v = clic.createGain(); o.type = 'square'; o.frequency.value = 1800;
+    v.gain.setValueAtTime(0.08, clic.currentTime); v.gain.exponentialRampToValueAtTime(0.001, clic.currentTime + 0.06);
+    o.connect(v).connect(clic.destination); o.start(); o.stop(clic.currentTime + 0.07);
+  } catch (e) {}
+}
+function setMode(st) {
+  studio = st; $('mStudio').setAttribute('aria-pressed', st); $('mRapide').setAttribute('aria-pressed', !st);
+  $('st3t').textContent = st ? 'Avancez de repère en repère' : 'Tournez lentement';
+  $('st3').textContent = st ? 'À chaque repère, l’appli affiche « Stop » : ne bougez plus, la photo part toute seule. Gardez la voiture entre les deux traits pointillés.'
+                            : 'Gardez la voiture entière et au centre. Un tour complet prend environ 40 secondes.';
+  $('st4').textContent = `Quand l'anneau est plein, les ${st ? 36 : 72} photos sont prêtes.`;
+}
 const cam = $('cam'), ov = $('overlay'), g = ov.getContext('2d');
 
 let model = null, stream = null;
@@ -221,11 +248,15 @@ let recorder = null, chunks = [], videoBlob = null, t0 = 0, tEnd = 0, sensorless
   }
   svg.innerHTML = h;
 })();
+let cible = -1;                          // prochain repere (mode studio)
 function paintRing() {
-  for (let i = 0; i < N; i++) $('seg' + i).setAttribute('stroke', !shots[i] ? 'rgba(255,255,255,.28)' : shotQ[i] === 2 ? '#65DEF1' : '#F17F29');
-  const n = shots.filter(Boolean).length;
-  $('shots').textContent = `${n}/${N}`;
-  $('pct').textContent = `${Math.round(n / N * 100)} %`;
+  for (let i = 0; i < N; i++) {
+    const vide = studio && i % 2 ? 'rgba(255,255,255,.08)' : 'rgba(255,255,255,.28)';
+    $('seg' + i).setAttribute('stroke', i === cible && !shots[i] ? '#FFFFFF' : !shots[i] ? vide : shotQ[i] === 2 ? '#65DEF1' : '#F17F29');
+  }
+  const n = shots.filter(Boolean).length, tot = N / PAS();
+  $('shots').textContent = `${n}/${tot}`;
+  $('pct').textContent = `${Math.round(n / tot * 100)} %`;
 }
 
 /* ---------- capteurs ---------- */
@@ -395,6 +426,9 @@ function guidance() {
   if (performance.now() - basculeAt < 1000) return { ok: false, kind: 'warn', state: 'Changement d’orientation', tip: 'Un instant…', sub: 'L’appli se recale' };
   if (rec && pitch0 != null && pitch != null && Math.abs(pitch - pitch0) > 6)
     return { ok: false, kind: 'warn', state: 'Hauteur changée', tip: pitch < pitch0 ? 'Remontez la visée' : 'Baissez la visée', sub: 'Même hauteur et même visée tout le tour' };
+  if (rec && studio && refH && Math.abs(smooth.h / refH - 1) > 0.12)
+    return { ok: true, kind: 'warn', state: 'Distance changée', tip: smooth.h > refH ? 'Reculez d’un pas' : 'Approchez d’un pas', sub: 'La voiture doit toucher les deux traits pointillés' };
+  if (rec && studio) return { ok: true, kind: 'ok', state: 'Voiture bien cadrée', tip: '', sub: '' };
   if (rec && hasSensor && speed > 45) return { ok: false, kind: 'warn', state: 'Trop rapide', tip: 'Plus lentement', sub: 'Environ 40 s pour le tour' };
   if (rec && hasSensor && speed > 25) return { ok: true, kind: 'ok', state: 'Voiture bien cadrée', tip: 'Un peu plus lentement', sub: '' };
   if (lum < 55) return { ok: true, kind: 'warn', state: 'Lumière faible', tip: rec ? '' : 'Lumière faible', sub: 'Photos plus sombres : de jour, le rendu est bien meilleur' };
@@ -408,6 +442,8 @@ let shotQ = new Array(N).fill(-1);
 function takeShot(i, q = 2) {
   shotQ[i] = q;
   if (pitch0 == null && pitch != null) pitch0 = pitch;
+  if (refH == null && det) refH = det.h;
+  if (studio) { declic(); flash = performance.now(); }
   const c = rot, [gw, gh] = geom(c), sc = Math.min(1, 1920 / Math.max(gw, gh));   // meme rotation que la detection
   drawUpright(grab, c, sc);
   const m = { index: i, angle: i * STEP, heading: heading == null ? null : +heading.toFixed(1), t: +((performance.now() - t0) / 1000).toFixed(2),
@@ -422,7 +458,7 @@ function takeShot(i, q = 2) {
 }
 
 /* ---------- boucle d'affichage ---------- */
-let lastDet = 0, running = false;
+let lastDet = 0, running = false, pretVu = 0, arret = 0, stopTxt = '', flash = 0;
 function loop() {
   running = true;
   const now = performance.now();
@@ -440,14 +476,35 @@ function loop() {
       $('timerTxt').textContent = `${Math.floor(el / 60)}:${String(Math.floor(el % 60)).padStart(2, '0')}`;
       // angle parcouru : boussole si dispo, sinon le temps (tour de 40 s)
       const turned = hasSensor && !sensorless ? Math.abs(unwrapped) : el / 40 * 360;
-      const i = Math.floor(turned / STEP);
+      let i = Math.floor(turned / STEP);
+      if (studio) {                                   // repere le plus proche (tous les 10 deg) : photo seulement a l'arret
+        const k = Math.round(turned / 10) * 2, ecart = turned - k * STEP;
+        cible = shotQ.findIndex((v, j) => j % 2 === 0 && v < 2 && j * STEP >= turned - 15); if (cible < 0) cible = N;   // un repere manque de loin reste un trou
+        i = Math.abs(ecart) <= 3 ? k % N : -1;
+        const r = hist.filter(h => now - h[0] < 260);                  // vitesse sur 0,25 s : l'arret est vu tout de suite
+        const vc = r.length > 1 ? Math.abs(r[r.length - 1][1] - r[0][1]) / Math.max(0.1, (r[r.length - 1][0] - r[0][0]) / 1000) : 0;
+        if (vc > 5) still0 = now;
+      }
       const entiere = det && det.x > UW * 0.012 && det.x + det.w < UW * 0.988 && det.y > UH * 0.012 && det.y + det.h < UH * 0.988;
       const stable = now - basculeAt > 1000 && detAt > basculeAt + 300 &&
         Math.round(rot / 90) === Math.round(correction(followsScreen) / 90) && Math.abs(rot - correction(followsScreen)) < 8;
       const q = !entiere || !stable ? 0 : gd.ok ? 2 : (det && now - detAt < 900 ? 1 : 0);   // 2 bien cadree, 1 voiture entiere, 0 rien
-      if (q > 0 && i >= 0 && i < N && q > shotQ[i]) takeShot(i, q);   // jamais de photo sans voiture reconnue
+      if (studio) {
+        const pret = q === 2 && i >= 0 && shotQ[i] < 2;
+        if (pret) pretVu = now; else if (now - pretVu > 300) still0 = now;   // un raté de detection d'une image ne relance pas l'attente
+        const proche = now - pretVu < 300;
+        stopTxt = proche ? 'Stop' : '';
+        arret = proche ? Math.min(1, (now - still0) / 450) : 0;            // 0,45 s immobile -> photo
+        if (pret && arret >= 1) takeShot(i, 2);
+        if (!proche && gd.ok && !gd.tip) {                                   // indication de marche vers le prochain repere
+          const reste = cible * STEP - turned;
+          if (cible < N && reste < -4) setTip('Revenez un peu', `Repère ${cible / 2 + 1}/36 dépassé`);
+          else if (cible < N) setTip('Avancez', `Jusqu’au repère ${cible / 2 + 1}/36`);
+        } else if (proche) setTip('Stop', 'Ne bougez plus');
+        paintRing();
+      } else if (q > 0 && i >= 0 && i < N && q > shotQ[i]) takeShot(i, q);   // jamais de photo sans voiture reconnue
       $('diag').textContent = `${Math.round(turned)}° · ${hasSensor && !sensorless ? 'gyroscope' : 'chrono 40 s'} · ${model ? (q ? 'voiture vue' : 'pas de voiture') : 'détection absente'}`;
-      if (turned >= 360 + STEP / 2 || shotQ.every(v => v === 2)) finish();
+      if (studio ? shotQ.every((v, j) => j % 2 || v === 2) || turned >= 370 : turned >= 360 + STEP / 2 || shotQ.every(v => v === 2)) finish();
     }
   }
   requestAnimationFrame(loop);
@@ -464,12 +521,41 @@ function draw(gd) {
   const P = (ux, uy) => { const [vx, vy] = toVideo(ux, uy); return [ox + vx * s, oy + vy * s]; };
   const x = smooth.x, y = smooth.y, w = smooth.w, h = smooth.h, L = Math.min(w, h) * 0.18;
   const col = gd.ok ? '#65DEF1' : '#F17F29';
-  g.strokeStyle = col; g.lineWidth = 4; g.lineCap = 'round'; g.lineJoin = 'round';
-  g.beginPath();
-  for (const [cx, cy, dx, dy] of [[x, y, 1, 1], [x + w, y, -1, 1], [x, y + h, 1, -1], [x + w, y + h, -1, -1]]) {
-    g.moveTo(...P(cx + dx * L, cy)); g.lineTo(...P(cx, cy)); g.lineTo(...P(cx, cy + dy * L));
+  const line = (pts, dash) => { g.setLineDash(dash || []); g.beginPath(); g.moveTo(...P(...pts[0])); for (const q of pts.slice(1)) g.lineTo(...P(...q)); g.stroke(); };
+  g.lineCap = 'round'; g.lineJoin = 'round';
+  if (studio) {
+    const cx = x + w / 2, sol = y + h, ext = w * 0.14;
+    // plateau au sol : demi-ellipse sous les roues, en perspective
+    g.strokeStyle = 'rgba(255,255,255,.55)'; g.lineWidth = 1.5;
+    const ell = []; for (let k = 0; k <= 40; k++) { const a = Math.PI * k / 40; ell.push([cx - Math.cos(a) * w * 0.62, sol - h * 0.03 + Math.sin(a) * h * 0.16]); }
+    line(ell);
+    // ligne de sol (sous les roues) et ligne de toit : la voiture doit tenir entre les deux
+    g.strokeStyle = col; g.lineWidth = 3;
+    line([[x - ext, sol], [x + w + ext, sol]]); line([[x - ext * 0.5, y], [x + w + ext * 0.5, y]]);
+    // axe vertical de la voiture + reperes de roues (quarts de la longueur)
+    g.lineWidth = 1.5; g.strokeStyle = 'rgba(255,255,255,.7)';
+    line([[cx, y - h * 0.12], [cx, sol + h * 0.12]], [4, 6]);
+    for (const f of [0.2, 0.8]) line([[x + w * f, sol - h * 0.06], [x + w * f, sol + h * 0.06]]);
+    // traits pointilles : hauteur de reference (1re photo) -> meme distance tout le tour
+    if (refH && rec) {
+      const my = y + h / 2; g.strokeStyle = gd.ok ? 'rgba(101,222,241,.95)' : 'rgba(249,105,0,.95)'; g.lineWidth = 2.5;
+      line([[x - ext * 1.6, my - refH / 2], [x + w + ext * 1.6, my - refH / 2]], [10, 8]);
+      line([[x - ext * 1.6, my + refH / 2], [x + w + ext * 1.6, my + refH / 2]], [10, 8]);
+    }
+    g.setLineDash([]);
+  } else {
+    g.strokeStyle = col; g.lineWidth = 4;
+    g.beginPath();
+    for (const [cx, cy, dx, dy] of [[x, y, 1, 1], [x + w, y, -1, 1], [x, y + h, 1, -1], [x + w, y + h, -1, -1]]) {
+      g.moveTo(...P(cx + dx * L, cy)); g.lineTo(...P(cx, cy)); g.lineTo(...P(cx, cy + dy * L));
+    }
+    g.stroke();
   }
-  g.stroke();
+  if (studio && rec && arret > 0) {                    // anneau d'arret : se remplit pendant l'immobilite
+    g.strokeStyle = '#65DEF1'; g.lineWidth = 5; g.beginPath();
+    g.arc(r.width / 2, r.height / 2, 34, -Math.PI / 2, -Math.PI / 2 + arret * Math.PI * 2); g.stroke();
+  }
+  if (performance.now() - flash < 180) { g.fillStyle = 'rgba(255,255,255,.35)'; g.fillRect(0, 0, r.width, r.height); }
   g.strokeStyle = 'rgba(255,255,255,.55)'; g.lineWidth = 1.5;
   g.beginPath(); g.moveTo(r.width / 2 - 10, r.height / 2); g.lineTo(r.width / 2 + 10, r.height / 2);
   g.moveTo(r.width / 2, r.height / 2 - 10); g.lineTo(r.width / 2, r.height / 2 + 10); g.stroke();
@@ -477,9 +563,12 @@ function draw(gd) {
 
 /* ---------- enregistrement ---------- */
 $('shutter').onclick = () => rec ? finish() : start();
+$('mStudio').onclick = () => setMode(true); $('mRapide').onclick = () => setMode(false);
 $('stopBtn').onclick = () => finish();
 function start() {
   shots = new Array(N).fill(null); shotQ = new Array(N).fill(-1); meta = []; paintRing();
+  if (studio && !hasSensor) setMode(false);          // sans gyroscope, impossible de reperer les arrets
+  refH = null; still0 = performance.now(); cible = 0; declic();
   rec = true; pitch0 = null; $('diag').hidden = false; unwrapped = 0; t0 = performance.now(); sensorless = !hasSensor;
   $('shutter').classList.add('rec'); $('shutter').setAttribute('aria-label', 'Arrêter');
   $('timer').hidden = false; $('stopBtn').hidden = false;
@@ -550,7 +639,7 @@ async function stabilise(list, onFrame) {
 /* ---------- mise a jour automatique ----------
    Safari garde la page en memoire (et plus longtemps depuis l'icone de l'ecran d'accueil) :
    on verifie la version en ligne a l'ouverture et au retour dans l'appli. */
-const VERSION = 12;
+const VERSION = 13;
 async function verifierMaj() {
   try {
     const t = await (await fetch(location.pathname + '?maj=' + Date.now(), { cache: 'no-store' })).text();
@@ -622,7 +711,7 @@ async function showDone() {
   // attendre (max 2 s) les photos encore en cours d'enregistrement
   for (let w = 0; w < 20 && shots.some(s => s === 'pending'); w++) await new Promise(r => setTimeout(r, 100));
   const got = shots.map((b, i) => b instanceof Blob && { b, i, m: meta[i] }).filter(Boolean);
-  $('sShots').textContent = got.length; $('sCover').textContent = `${got.length * STEP}°`;
+  $('sShots').textContent = got.length; $('sCover').textContent = `${Math.min(360, got.length * STEP * PAS())}°`;
   $('sTime').textContent = `${Math.max(0, Math.round((tEnd - t0) / 1000))} s`;
   $('savePhotos').querySelector('.txt').textContent = `Enregistrer les ${got.length} photos`;
   $('savePhotos').hidden = !got.length; $('cloud').hidden = got.length < 4; resetCloud();
