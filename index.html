@@ -112,12 +112,14 @@ video, #overlay { position: absolute; inset: 0; width: 100%; height: 100%; objec
 .cRes { display: grid; gap: 10px; }
 .cRes a { display: block; text-align: center; text-decoration: none; background: var(--ink); color: #fff; font-weight: 700; padding: 15px 18px; border-radius: 999px; }
 #cMsg.bad { color: #B84D00; font-weight: 600; }
+#majBar { position: fixed; z-index: 60; left: 12px; right: 12px; bottom: calc(env(safe-area-inset-bottom,0px) + 12px); background: var(--pumpkin); color: var(--ink); font-weight: 700; padding: 14px; border-radius: 14px; box-shadow: 0 8px 24px rgba(0,0,0,.25); }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 </style>
 </head>
 <body>
 
 <div id="errBox" role="alert" hidden></div>
+<button id="majBar" hidden onclick="location.replace(location.pathname + '?v=' + Date.now())">Nouvelle version disponible : touchez pour mettre à jour</button>
 
 <section id="intro">
   <div>
@@ -142,7 +144,7 @@ video, #overlay { position: absolute; inset: 0; width: 100%; height: 100%; objec
   </ol>
   <button class="primary flow" id="go"><svg class="arr a2" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg><span class="txt">Ouvrir la caméra</span><span class="circle" aria-hidden="true"></span><svg class="arr a1" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
   <p class="err" id="introErr" hidden></p>
-  <p class="note">Rien n'est envoyé sans votre accord : seul le bouton « Créer mon 360 » envoie les photos. · version 9</p>
+  <p class="note">Rien n'est envoyé sans votre accord : seul le bouton « Créer mon 360 » envoie les photos. · version 10</p>
 </section>
 
 <section id="shoot" hidden>
@@ -536,6 +538,24 @@ async function stabilise(list, onFrame) {
     } catch (e) { onFrame(k, b); }   // si une photo echoue, on garde la photo brute
   }
 }
+
+/* ---------- mise a jour automatique ----------
+   Safari garde la page en memoire (et plus longtemps depuis l'icone de l'ecran d'accueil) :
+   on verifie la version en ligne a l'ouverture et au retour dans l'appli. */
+const VERSION = 10;
+async function verifierMaj() {
+  try {
+    const t = await (await fetch(location.pathname + '?maj=' + Date.now(), { cache: 'no-store' })).text();
+    const m = t.match(/version (\d+)<\/p>/), v = m ? +m[1] : 0;
+    const deja = +new URLSearchParams(location.search).get('v') || 0;   // jamais de boucle de rechargement
+    if (v > VERSION && v > deja) {
+      if (!$('intro').hidden) location.replace(location.pathname + '?v=' + v);   // accueil : on recharge tout de suite
+      else $('majBar').hidden = false;                                         // en cours : on propose
+    }
+  } catch (e) {}
+}
+verifierMaj();
+document.addEventListener('visibilitychange', () => { if (!document.hidden) verifierMaj(); });
 
 /* ---------- page 360 en ligne (serveur Modal) ---------- */
 const API = 'https://hatimdaifa--studio360.us-east.modal.run';
