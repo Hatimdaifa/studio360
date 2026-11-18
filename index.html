@@ -142,7 +142,7 @@ video, #overlay { position: absolute; inset: 0; width: 100%; height: 100%; objec
   </ol>
   <button class="primary flow" id="go"><svg class="arr a2" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg><span class="txt">Ouvrir la caméra</span><span class="circle" aria-hidden="true"></span><svg class="arr a1" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
   <p class="err" id="introErr" hidden></p>
-  <p class="note">Rien n'est envoyé sans votre accord : seul le bouton « Créer mon 360 » envoie les photos. · version 8</p>
+  <p class="note">Rien n'est envoyé sans votre accord : seul le bouton « Créer mon 360 » envoie les photos. · version 9</p>
 </section>
 
 <section id="shoot" hidden>
@@ -245,8 +245,13 @@ function upAngle(e) {
   if (Math.hypot(ux, uy) < 0.3) return null;           // telephone a plat : on garde la derniere valeur
   return Math.atan2(ux, uy) / r;
 }
+let pitch = null, pitch0 = null;           // visee de la camera : 0 = horizontale, negatif = vers le bas
 function onOrient(e) {
   const u = upAngle(e); if (u != null) devUp = u;
+  if (e.beta != null && e.gamma != null) {
+    const r = Math.PI / 180, vz = -Math.cos(e.beta * r) * Math.cos(e.gamma * r);
+    pitch = Math.asin(Math.max(-1, Math.min(1, vz))) / r;
+  }
   let h = camHeading(e);
   if (h == null && typeof e.webkitCompassHeading === 'number') h = e.webkitCompassHeading;
   if (h == null || isNaN(h)) return;
@@ -380,6 +385,8 @@ function guidance() {
   if (fw < 0.42) return { ok: false, kind: 'warn', state: 'Trop loin', tip: 'Approchez-vous', sub: 'La voiture doit remplir l’écran' };
   if (Math.abs(cx) > 0.14) return { ok: false, kind: 'warn', state: 'Décentrée', tip: cx > 0 ? 'Visez plus à droite' : 'Visez plus à gauche', sub: 'Voiture au centre' };
   if (Math.abs(cy) > 0.18) return { ok: false, kind: 'warn', state: 'Décentrée', tip: cy > 0 ? 'Visez plus bas' : 'Visez plus haut', sub: '' };
+  if (rec && pitch0 != null && pitch != null && Math.abs(pitch - pitch0) > 6)
+    return { ok: false, kind: 'warn', state: 'Hauteur changée', tip: pitch < pitch0 ? 'Remontez la visée' : 'Baissez la visée', sub: 'Même hauteur et même visée tout le tour' };
   if (rec && hasSensor && speed > 45) return { ok: false, kind: 'warn', state: 'Trop rapide', tip: 'Plus lentement', sub: 'Environ 40 s pour le tour' };
   if (rec && hasSensor && speed > 25) return { ok: true, kind: 'ok', state: 'Voiture bien cadrée', tip: 'Un peu plus lentement', sub: '' };
   if (lum < 55) return { ok: true, kind: 'warn', state: 'Lumière faible', tip: rec ? '' : 'Lumière faible', sub: 'Photos plus sombres : de jour, le rendu est bien meilleur' };
@@ -392,10 +399,11 @@ const grab = document.createElement('canvas');
 let shotQ = new Array(N).fill(-1);
 function takeShot(i, q = 2) {
   shotQ[i] = q;
+  if (pitch0 == null && pitch != null) pitch0 = pitch;
   const c = correction(followsScreen), [gw, gh] = geom(c), sc = Math.min(1, 1280 / Math.max(gw, gh));
   drawUpright(grab, c, sc);
   const m = { index: i, angle: i * STEP, heading: heading == null ? null : +heading.toFixed(1), t: +((performance.now() - t0) / 1000).toFixed(2),
-    q, box: det && q > 0 ? [det.x, det.y, det.w, det.h].map(v => Math.round(v * sc)) : null, video: [grab.width, grab.height], tilt: +c.toFixed(1), speed: Math.round(speed) };
+    q, box: det && q > 0 ? [det.x, det.y, det.w, det.h].map(v => Math.round(v * sc)) : null, video: [grab.width, grab.height], tilt: +c.toFixed(1), pitch: pitch == null ? null : +pitch.toFixed(1), speed: Math.round(speed) };
   if (!(shots[i] instanceof Blob)) shots[i] = 'pending';
   grab.toBlob(b => {
     if (b && shotQ[i] === q) { shots[i] = b; meta[i] = m; }
@@ -462,7 +470,7 @@ $('shutter').onclick = () => rec ? finish() : start();
 $('stopBtn').onclick = () => finish();
 function start() {
   shots = new Array(N).fill(null); shotQ = new Array(N).fill(-1); meta = []; paintRing();
-  rec = true; $('diag').hidden = false; unwrapped = 0; t0 = performance.now(); sensorless = !hasSensor;
+  rec = true; pitch0 = null; $('diag').hidden = false; unwrapped = 0; t0 = performance.now(); sensorless = !hasSensor;
   $('shutter').classList.add('rec'); $('shutter').setAttribute('aria-label', 'Arrêter');
   $('timer').hidden = false; $('stopBtn').hidden = false;
   chunks = []; videoBlob = null;
@@ -545,7 +553,8 @@ $('cGo').onclick = () => {
   store.set('s360code', code);
   const fd = new FormData(); fd.append('code', code); fd.append('nom', nom);
   got.forEach(o => fd.append('photos', o.b, `v${String(o.i).padStart(2, '0')}.jpg`));
-  fd.append('boites', JSON.stringify(got.map(o => (meta[o.i] && meta[o.i].box) || null)));   // cadre de la voiture vue par l'appli
+  fd.append('boites', JSON.stringify(got.map(o => (meta[o.i] && meta[o.i].box) || null)));
+  fd.append('visees', JSON.stringify(got.map(o => (meta[o.i] && meta[o.i].pitch) ?? null)));        // visee de chaque photo : pour redresser la perspective
   $('cGo').disabled = true; $('cRes').hidden = true; cBar(0); cMsg('Envoi des photos…');
   const x = new XMLHttpRequest(); x.open('POST', API + '/creer');
   x.upload.onprogress = e => e.lengthComputable && cBar(e.loaded / e.total * 0.4);
