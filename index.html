@@ -144,7 +144,7 @@ video, #overlay { position: absolute; inset: 0; width: 100%; height: 100%; objec
   </ol>
   <button class="primary flow" id="go"><svg class="arr a2" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg><span class="txt">Ouvrir la caméra</span><span class="circle" aria-hidden="true"></span><svg class="arr a1" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
   <p class="err" id="introErr" hidden></p>
-  <p class="note">Rien n'est envoyé sans votre accord : seul le bouton « Créer mon 360 » envoie les photos. · version 10</p>
+  <p class="note">Rien n'est envoyé sans votre accord : seul le bouton « Créer mon 360 » envoie les photos. · version 11</p>
 </section>
 
 <section id="shoot" hidden>
@@ -248,8 +248,13 @@ function upAngle(e) {
   return Math.atan2(ux, uy) / r;
 }
 let pitch = null, pitch0 = null;           // visee de la camera : 0 = horizontale, negatif = vers le bas
+let quart = null, basculeAt = 0;            // quart de tour du telephone ; heure du dernier changement
+function marqueBascule() { basculeAt = performance.now(); }
+addEventListener('orientationchange', marqueBascule);
+if (screen.orientation) screen.orientation.addEventListener('change', marqueBascule);
 function onOrient(e) {
   const u = upAngle(e); if (u != null) devUp = u;
+  if (devUp != null) { const q4 = ((Math.round(devUp / 90) % 4) + 4) % 4; if (q4 !== quart) { quart = q4; marqueBascule(); } }
   if (e.beta != null && e.gamma != null) {
     const r = Math.PI / 180, vz = -Math.cos(e.beta * r) * Math.cos(e.gamma * r);
     pitch = Math.asin(Math.max(-1, Math.min(1, vz))) / r;
@@ -387,6 +392,7 @@ function guidance() {
   if (fw < 0.42) return { ok: false, kind: 'warn', state: 'Trop loin', tip: 'Approchez-vous', sub: 'La voiture doit remplir l’écran' };
   if (Math.abs(cx) > 0.14) return { ok: false, kind: 'warn', state: 'Décentrée', tip: cx > 0 ? 'Visez plus à droite' : 'Visez plus à gauche', sub: 'Voiture au centre' };
   if (Math.abs(cy) > 0.18) return { ok: false, kind: 'warn', state: 'Décentrée', tip: cy > 0 ? 'Visez plus bas' : 'Visez plus haut', sub: '' };
+  if (performance.now() - basculeAt < 1000) return { ok: false, kind: 'warn', state: 'Changement d’orientation', tip: 'Un instant…', sub: 'L’appli se recale' };
   if (rec && pitch0 != null && pitch != null && Math.abs(pitch - pitch0) > 6)
     return { ok: false, kind: 'warn', state: 'Hauteur changée', tip: pitch < pitch0 ? 'Remontez la visée' : 'Baissez la visée', sub: 'Même hauteur et même visée tout le tour' };
   if (rec && hasSensor && speed > 45) return { ok: false, kind: 'warn', state: 'Trop rapide', tip: 'Plus lentement', sub: 'Environ 40 s pour le tour' };
@@ -402,7 +408,7 @@ let shotQ = new Array(N).fill(-1);
 function takeShot(i, q = 2) {
   shotQ[i] = q;
   if (pitch0 == null && pitch != null) pitch0 = pitch;
-  const c = correction(followsScreen), [gw, gh] = geom(c), sc = Math.min(1, 1280 / Math.max(gw, gh));
+  const c = rot, [gw, gh] = geom(c), sc = Math.min(1, 1280 / Math.max(gw, gh));   // meme rotation que la detection
   drawUpright(grab, c, sc);
   const m = { index: i, angle: i * STEP, heading: heading == null ? null : +heading.toFixed(1), t: +((performance.now() - t0) / 1000).toFixed(2),
     q, box: det && q > 0 ? [det.x, det.y, det.w, det.h].map(v => Math.round(v * sc)) : null, video: [grab.width, grab.height], tilt: +c.toFixed(1), pitch: pitch == null ? null : +pitch.toFixed(1), speed: Math.round(speed) };
@@ -436,7 +442,9 @@ function loop() {
       const turned = hasSensor && !sensorless ? Math.abs(unwrapped) : el / 40 * 360;
       const i = Math.floor(turned / STEP);
       const entiere = det && det.x > UW * 0.012 && det.x + det.w < UW * 0.988 && det.y > UH * 0.012 && det.y + det.h < UH * 0.988;
-      const q = !entiere ? 0 : gd.ok ? 2 : (det && now - detAt < 900 ? 1 : 0);   // 2 bien cadree, 1 voiture entiere, 0 rien
+      const stable = now - basculeAt > 1000 && detAt > basculeAt + 300 &&
+        Math.round(rot / 90) === Math.round(correction(followsScreen) / 90) && Math.abs(rot - correction(followsScreen)) < 8;
+      const q = !entiere || !stable ? 0 : gd.ok ? 2 : (det && now - detAt < 900 ? 1 : 0);   // 2 bien cadree, 1 voiture entiere, 0 rien
       if (q > 0 && i >= 0 && i < N && q > shotQ[i]) takeShot(i, q);   // jamais de photo sans voiture reconnue
       $('diag').textContent = `${Math.round(turned)}° · ${hasSensor && !sensorless ? 'gyroscope' : 'chrono 40 s'} · ${model ? (q ? 'voiture vue' : 'pas de voiture') : 'détection absente'}`;
       if (turned >= 360 + STEP / 2 || shotQ.every(v => v === 2)) finish();
@@ -542,7 +550,7 @@ async function stabilise(list, onFrame) {
 /* ---------- mise a jour automatique ----------
    Safari garde la page en memoire (et plus longtemps depuis l'icone de l'ecran d'accueil) :
    on verifie la version en ligne a l'ouverture et au retour dans l'appli. */
-const VERSION = 10;
+const VERSION = 11;
 async function verifierMaj() {
   try {
     const t = await (await fetch(location.pathname + '?maj=' + Date.now(), { cache: 'no-store' })).text();
