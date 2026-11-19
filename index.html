@@ -78,8 +78,12 @@ video, #overlay { position: absolute; inset: 0; width: 100%; height: 100%; objec
 #diag { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(150px + env(safe-area-inset-bottom)); font: 500 12px var(--mono); color: #fff; background: rgba(0,0,0,.45); padding: 4px 10px; border-radius: 999px; white-space: nowrap; pointer-events: none; }
 #timer .dot { background: var(--rec); animation: blink 1s steps(2) infinite; }
 @keyframes blink { 50% { opacity: .2; } }
-#tip { position: absolute; left: 50%; top: 42%; transform: translate(-50%,-50%); text-align: center; font-weight: 800; font-size: 26px; line-height: 1.1;
-  text-shadow: 0 2px 18px rgba(0,0,0,.6); padding: 0 24px; width: 100%; max-width: 560px; transition: opacity .2s; pointer-events: none; }
+#tip { position: absolute; left: 50%; top: calc(64px + env(safe-area-inset-top)); transform: translateX(-50%); text-align: center; font-weight: 800; font-size: 22px; line-height: 1.15;
+  background: rgba(21,50,58,.78); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); color: #fff; border-radius: 18px; padding: 12px 18px;
+  width: calc(100% - 32px); max-width: 520px; transition: background .2s; pointer-events: none; }
+#tip:empty { display: none; }
+#tip.stop { background: rgba(249,105,0,.92); font-size: 30px; letter-spacing: .04em; }
+#tip.go { background: rgba(21,50,58,.78); }
 #tip small { display: block; font: 500 13px var(--mono); margin-top: 8px; opacity: .85; letter-spacing: .02em; }
 .bottom { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 max(14px, env(safe-area-inset-right,0px)) calc(env(safe-area-inset-bottom,0px) + 18px) max(14px, env(safe-area-inset-left,0px));
   display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; }
@@ -147,12 +151,12 @@ video, #overlay { position: absolute; inset: 0; width: 100%; height: 100%; objec
   <ol class="steps">
     <li><div><b>Portrait ou paysage</b><span>À hauteur de poitrine. Paysage de préférence ; passez en portrait si vous manquez de recul, l’appli suit.</span></div></li>
     <li><div><b>Commencez face à l'avant</b><span>Attendez que le cadre bleu entoure la voiture, puis appuyez sur le bouton.</span></div></li>
-    <li><div><b id="st3t">Avancez de repère en repère</b><span id="st3">À chaque repère, l’appli affiche « Stop » : ne bougez plus, la photo part toute seule. Gardez la voiture entre les deux traits pointillés.</span></div></li>
+    <li><div><b id="st3t">Avancez de repère en repère</b><span id="st3">Suivez le point blanc sur la petite carte. Quand « STOP » s’affiche, ne bougez plus : la photo part toute seule. Gardez la voiture dans le dessin 3D.</span></div></li>
     <li><div><b>L'appli s'arrête seule</b><span id="st4">Quand l'anneau est plein, les 36 photos sont prêtes.</span></div></li>
   </ol>
   <button class="primary flow" id="go"><svg class="arr a2" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg><span class="txt">Ouvrir la caméra</span><span class="circle" aria-hidden="true"></span><svg class="arr a1" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
   <p class="err" id="introErr" hidden></p>
-  <p class="note">Rien n'est envoyé sans votre accord : seul le bouton « Créer mon 360 » envoie les photos. · version 13</p>
+  <p class="note">Rien n'est envoyé sans votre accord : seul le bouton « Créer mon 360 » envoie les photos. · version 14</p>
 </section>
 
 <section id="shoot" hidden>
@@ -224,7 +228,7 @@ function declic() {                     // petit bruit d'obturateur (l'iPhone ne
 function setMode(st) {
   studio = st; $('mStudio').setAttribute('aria-pressed', st); $('mRapide').setAttribute('aria-pressed', !st);
   $('st3t').textContent = st ? 'Avancez de repère en repère' : 'Tournez lentement';
-  $('st3').textContent = st ? 'À chaque repère, l’appli affiche « Stop » : ne bougez plus, la photo part toute seule. Gardez la voiture entre les deux traits pointillés.'
+  $('st3').textContent = st ? 'Suivez le point blanc sur la petite carte. Quand « STOP » s’affiche, ne bougez plus : la photo part toute seule. Gardez la voiture dans le dessin 3D.'
                             : 'Gardez la voiture entière et au centre. Un tour complet prend environ 40 secondes.';
   $('st4').textContent = `Quand l'anneau est plein, les ${st ? 36 : 72} photos sont prêtes.`;
 }
@@ -410,7 +414,7 @@ async function detect() {
 function score([x, y, w, h], vw) { const cx = x + w / 2 - vw / 2; return w * h - Math.abs(cx) * h * 0.5; }
 
 function setState(kind, txt) { $('state').className = 'pill ' + kind; $('stateTxt').textContent = txt; }
-function setTip(main, sub) { $('tip').innerHTML = main ? `${main}${sub ? `<small>${sub}</small>` : ''}` : ''; }
+function setTip(main, sub, cls) { $('tip').innerHTML = main ? `${main}${sub ? `<small>${sub}</small>` : ''}` : ''; $('tip').className = cls || ''; }
 
 function guidance() {
   const fresh = det && performance.now() - detAt < 900;
@@ -427,7 +431,7 @@ function guidance() {
   if (rec && pitch0 != null && pitch != null && Math.abs(pitch - pitch0) > 6)
     return { ok: false, kind: 'warn', state: 'Hauteur changée', tip: pitch < pitch0 ? 'Remontez la visée' : 'Baissez la visée', sub: 'Même hauteur et même visée tout le tour' };
   if (rec && studio && refH && Math.abs(smooth.h / refH - 1) > 0.12)
-    return { ok: true, kind: 'warn', state: 'Distance changée', tip: smooth.h > refH ? 'Reculez d’un pas' : 'Approchez d’un pas', sub: 'La voiture doit toucher les deux traits pointillés' };
+    return { ok: true, kind: 'warn', state: 'Distance changée', tip: smooth.h > refH ? 'Reculez d’un pas' : 'Approchez d’un pas', sub: 'La voiture doit avoir la taille du dessin 3D' };
   if (rec && studio) return { ok: true, kind: 'ok', state: 'Voiture bien cadrée', tip: '', sub: '' };
   if (rec && hasSensor && speed > 45) return { ok: false, kind: 'warn', state: 'Trop rapide', tip: 'Plus lentement', sub: 'Environ 40 s pour le tour' };
   if (rec && hasSensor && speed > 25) return { ok: true, kind: 'ok', state: 'Voiture bien cadrée', tip: 'Un peu plus lentement', sub: '' };
@@ -498,9 +502,9 @@ function loop() {
         if (pret && arret >= 1) takeShot(i, 2);
         if (!proche && gd.ok && !gd.tip) {                                   // indication de marche vers le prochain repere
           const reste = cible * STEP - turned;
-          if (cible < N && reste < -4) setTip('Revenez un peu', `Repère ${cible / 2 + 1}/36 dépassé`);
-          else if (cible < N) setTip('Avancez', `Jusqu’au repère ${cible / 2 + 1}/36`);
-        } else if (proche) setTip('Stop', 'Ne bougez plus');
+          if (cible < N && reste < -4) setTip('↩ Revenez d’un petit pas', `Vous avez dépassé la photo ${cible / 2 + 1}/36 (point blanc sur la carte)`, 'go');
+          else if (cible < N) setTip(reste > 6 ? 'Marchez autour de la voiture' : 'Encore un petit pas', `Prochaine photo : ${cible / 2 + 1}/36 · point blanc sur la carte`, 'go');
+        } else if (proche) setTip('STOP', 'Ne bougez plus · photo dans un instant', 'stop');
         paintRing();
       } else if (q > 0 && i >= 0 && i < N && q > shotQ[i]) takeShot(i, q);   // jamais de photo sans voiture reconnue
       $('diag').textContent = `${Math.round(turned)}° · ${hasSensor && !sensorless ? 'gyroscope' : 'chrono 40 s'} · ${model ? (q ? 'voiture vue' : 'pas de voiture') : 'détection absente'}`;
@@ -524,25 +528,19 @@ function draw(gd) {
   const line = (pts, dash) => { g.setLineDash(dash || []); g.beginPath(); g.moveTo(...P(...pts[0])); for (const q of pts.slice(1)) g.lineTo(...P(...q)); g.stroke(); };
   g.lineCap = 'round'; g.lineJoin = 'round';
   if (studio) {
-    const cx = x + w / 2, sol = y + h, ext = w * 0.14;
-    // plateau au sol : demi-ellipse sous les roues, en perspective
-    g.strokeStyle = 'rgba(255,255,255,.55)'; g.lineWidth = 1.5;
-    const ell = []; for (let k = 0; k <= 40; k++) { const a = Math.PI * k / 40; ell.push([cx - Math.cos(a) * w * 0.62, sol - h * 0.03 + Math.sin(a) * h * 0.16]); }
-    line(ell);
-    // ligne de sol (sous les roues) et ligne de toit : la voiture doit tenir entre les deux
-    g.strokeStyle = col; g.lineWidth = 3;
-    line([[x - ext, sol], [x + w + ext, sol]]); line([[x - ext * 0.5, y], [x + w + ext * 0.5, y]]);
-    // axe vertical de la voiture + reperes de roues (quarts de la longueur)
-    g.lineWidth = 1.5; g.strokeStyle = 'rgba(255,255,255,.7)';
-    line([[cx, y - h * 0.12], [cx, sol + h * 0.12]], [4, 6]);
-    for (const f of [0.2, 0.8]) line([[x + w * f, sol - h * 0.06], [x + w * f, sol + h * 0.06]]);
-    // traits pointilles : hauteur de reference (1re photo) -> meme distance tout le tour
-    if (refH && rec) {
-      const my = y + h / 2; g.strokeStyle = gd.ok ? 'rgba(101,222,241,.95)' : 'rgba(249,105,0,.95)'; g.lineWidth = 2.5;
-      line([[x - ext * 1.6, my - refH / 2], [x + w + ext * 1.6, my - refH / 2]], [10, 8]);
-      line([[x - ext * 1.6, my + refH / 2], [x + w + ext * 1.6, my + refH / 2]], [10, 8]);
+    // silhouette 3D de voiture, vue sous l'angle ou l'on se trouve, posee sur la voiture detectee
+    const az = rec ? unwrapped : 0, hRef = refH && rec ? refH : h;
+    const segs = fil3D(az, pitch);
+    let mnx = 1e9, mxx = -1e9, mny = 1e9, mxy = -1e9;
+    for (const sg of segs) for (const q of [sg[0], sg[1]]) { mnx = Math.min(mnx, q[0]); mxx = Math.max(mxx, q[0]); mny = Math.min(mny, q[1]); mxy = Math.max(mxy, q[1]); }
+    // le dessin epouse la voiture detectee (largeur et hauteur), a la taille de reference si elle est connue
+    const k = Math.min(w / (mxx - mnx), hRef / (mxy - mny), h * 1.25 / (mxy - mny)), ox2 = x + w / 2 - (mnx + mxx) / 2 * k, oy2 = y + h - mxy * k;
+    const ok = gd.ok;
+    for (const [p1, p2, prof] of segs) {
+      const al = 0.25 + 0.7 * prof;                                 // traits proches plus visibles que ceux de l'autre cote
+      g.strokeStyle = ok ? `rgba(101,222,241,${al})` : `rgba(249,105,0,${al})`; g.lineWidth = 1 + 1.6 * prof;
+      g.beginPath(); g.moveTo(...P(ox2 + p1[0] * k, oy2 + p1[1] * k)); g.lineTo(...P(ox2 + p2[0] * k, oy2 + p2[1] * k)); g.stroke();
     }
-    g.setLineDash([]);
   } else {
     g.strokeStyle = col; g.lineWidth = 4;
     g.beginPath();
@@ -551,6 +549,7 @@ function draw(gd) {
     }
     g.stroke();
   }
+  if (studio && rec) carte(r.width, r.height);
   if (studio && rec && arret > 0) {                    // anneau d'arret : se remplit pendant l'immobilite
     g.strokeStyle = '#65DEF1'; g.lineWidth = 5; g.beginPath();
     g.arc(r.width / 2, r.height / 2, 34, -Math.PI / 2, -Math.PI / 2 + arret * Math.PI * 2); g.stroke();
@@ -559,6 +558,51 @@ function draw(gd) {
   g.strokeStyle = 'rgba(255,255,255,.55)'; g.lineWidth = 1.5;
   g.beginPath(); g.moveTo(r.width / 2 - 10, r.height / 2); g.lineTo(r.width / 2 + 10, r.height / 2);
   g.moveTo(r.width / 2, r.height / 2 - 10); g.lineTo(r.width / 2, r.height / 2 + 10); g.stroke();
+}
+
+/* ---------- silhouette 3D (fil de fer) et carte vue de dessus ---------- */
+const MODELE = (() => {                       // voiture compacte en metres : x vers l'avant, y vers la gauche, z vers le haut
+  const caisse = [[2.15, .32], [2.22, .62], [2.02, .84], [1.0, .97], [-2.02, 1.02], [-2.17, .62], [-2.12, .32]];
+  const vitres = [[.95, .99], [.2, 1.46], [-1.35, 1.44], [-1.95, 1.04]];
+  const S = []; const W = .9, Wv = .76;
+  const boucle = (pts, y, ferme) => { for (let i = 0; i < pts.length - (ferme ? 0 : 1); i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; S.push([[a[0], y, a[1]], [b[0], y, b[1]]]); } };
+  for (const y of [W, -W]) boucle(caisse, y, true);
+  for (const y of [Wv, -Wv]) boucle(vitres, y, false);
+  for (const [x, z] of caisse) S.push([[x, W, z], [x, -W, z]]);              // traverses gauche-droite
+  for (const [x, z] of vitres) S.push([[x, Wv, z], [x, -Wv, z]]);
+  for (const xr of [1.35, -1.35]) for (const y of [W + .02, -W - .02]) {        // roues
+    for (let i = 0; i < 20; i++) { const a = i / 20 * 2 * Math.PI, b = (i + 1) / 20 * 2 * Math.PI;
+      S.push([[xr + .33 * Math.cos(a), y, .33 + .33 * Math.sin(a)], [xr + .33 * Math.cos(b), y, .33 + .33 * Math.sin(b)]]); }
+  }
+  return S;
+})();
+function fil3D(azDeg, pitchDeg) {            // projection perspective depuis la position du photographe
+  const az = azDeg * Math.PI / 180, D = 6.5, hc = 1.0 + 6.5 * Math.tan(Math.min(25, Math.max(0, -(pitchDeg || -8))) * Math.PI / 180) * .5;
+  const c = [D * Math.cos(az), -D * Math.sin(az), hc], t = [0, 0, .7];
+  let f = [t[0] - c[0], t[1] - c[1], t[2] - c[2]]; const n = Math.hypot(...f); f = f.map(v => v / n);
+  let rr = [f[1], -f[0], 0]; const nr = Math.hypot(...rr); rr = rr.map(v => v / nr);
+  const u = [rr[1] * f[2] - rr[2] * f[1], rr[2] * f[0] - rr[0] * f[2], rr[0] * f[1] - rr[1] * f[0]];
+  const pr = p => { const v = [p[0] - c[0], p[1] - c[1], p[2] - c[2]]; const zc = v[0] * f[0] + v[1] * f[1] + v[2] * f[2];
+    return [(v[0] * rr[0] + v[1] * rr[1]) / zc, -(v[0] * u[0] + v[1] * u[1] + v[2] * u[2]) / zc, zc]; };
+  const out = MODELE.map(([a, b]) => { const A = pr(a), B = pr(b); return [A, B, (A[2] + B[2]) / 2]; });
+  const zs = out.map(o => o[2]), z0 = Math.min(...zs), z1 = Math.max(...zs);
+  return out.map(([A, B, z]) => [A, B, 1 - (z - z0) / Math.max(1e-6, z1 - z0)]);
+}
+function carte(W, H) {                        // vue de dessus : voiture, 36 points de photo, vous, prochaine photo
+  const R = 38, cx = W > H ? R + 22 : W - R - 22, cy = W > H ? 150 : 64 + 110 + R;
+  g.fillStyle = 'rgba(21,50,58,.72)'; g.beginPath(); g.arc(cx, cy, R + 14, 0, 2 * Math.PI); g.fill();
+  g.fillStyle = 'rgba(255,255,255,.9)'; g.beginPath(); g.roundRect ? g.roundRect(cx - 7, cy - 15, 14, 30, 4) : g.rect(cx - 7, cy - 15, 14, 30); g.fill();
+  g.fillStyle = '#F96900'; g.fillRect(cx - 5, cy - 15, 10, 4);                 // avant de la voiture (en haut)
+  const pt = a => [cx + R * Math.sin(a * Math.PI / 180), cy - R * Math.cos(a * Math.PI / 180)];
+  for (let j = 0; j < N; j += 2) {
+    const [px, py] = pt(j * STEP * Math.sign(unwrapped || 1));
+    g.fillStyle = shotQ[j] >= 2 ? '#65DEF1' : j === cible ? '#fff' : 'rgba(255,255,255,.25)';
+    g.beginPath(); g.arc(px, py, j === cible ? 4.5 : 2.4, 0, 2 * Math.PI); g.fill();
+  }
+  const [mx, my] = pt(unwrapped);
+  g.fillStyle = '#F96900'; g.strokeStyle = '#fff'; g.lineWidth = 2;
+  g.beginPath(); g.arc(mx, my, 6, 0, 2 * Math.PI); g.fill(); g.stroke();
+  g.fillStyle = '#fff'; g.font = '600 11px Poppins, sans-serif'; g.textAlign = 'center'; g.fillText('vous', mx, my - 10); g.textAlign = 'start';
 }
 
 /* ---------- enregistrement ---------- */
@@ -639,7 +683,7 @@ async function stabilise(list, onFrame) {
 /* ---------- mise a jour automatique ----------
    Safari garde la page en memoire (et plus longtemps depuis l'icone de l'ecran d'accueil) :
    on verifie la version en ligne a l'ouverture et au retour dans l'appli. */
-const VERSION = 13;
+const VERSION = 14;
 async function verifierMaj() {
   try {
     const t = await (await fetch(location.pathname + '?maj=' + Date.now(), { cache: 'no-store' })).text();
