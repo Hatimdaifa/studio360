@@ -150,13 +150,13 @@ video, #overlay { position: absolute; inset: 0; width: 100%; height: 100%; objec
   </div>
   <ol class="steps">
     <li><div><b>Portrait ou paysage</b><span>À hauteur de poitrine. Paysage de préférence ; passez en portrait si vous manquez de recul, l’appli suit.</span></div></li>
-    <li><div><b>Commencez face à l'avant</b><span>Attendez que le cadre bleu entoure la voiture, puis appuyez sur le bouton.</span></div></li>
+    <li><div><b>Commencez où vous voulez</b><span>De préférence face à l'avant. Attendez que le dessin 3D se pose sur la voiture, puis appuyez sur le bouton.</span></div></li>
     <li><div><b id="st3t">Avancez de repère en repère</b><span id="st3">Suivez le point blanc sur la petite carte. Quand « STOP » s’affiche, ne bougez plus : la photo part toute seule. Gardez la voiture dans le dessin 3D.</span></div></li>
     <li><div><b>L'appli s'arrête seule</b><span id="st4">Quand l'anneau est plein, les 36 photos sont prêtes.</span></div></li>
   </ol>
   <button class="primary flow" id="go"><svg class="arr a2" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg><span class="txt">Ouvrir la caméra</span><span class="circle" aria-hidden="true"></span><svg class="arr a1" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
   <p class="err" id="introErr" hidden></p>
-  <p class="note">Rien n'est envoyé sans votre accord : seul le bouton « Créer mon 360 » envoie les photos. · version 14</p>
+  <p class="note">Rien n'est envoyé sans votre accord : seul le bouton « Créer mon 360 » envoie les photos. · version 15</p>
 </section>
 
 <section id="shoot" hidden>
@@ -406,7 +406,7 @@ async function detect() {
     if (r) {
       if (r.w !== UW || r.h !== UH) smooth = null;  // passage portrait <-> paysage : on repart a zero
       rot = r.c; UW = r.w; UH = r.h;
-      det = r.box; detAt = performance.now();
+      det = r.box; detAt = performance.now(); noterForme(det);
     }
   } catch (e) {}
   busy = false;
@@ -529,7 +529,7 @@ function draw(gd) {
   g.lineCap = 'round'; g.lineJoin = 'round';
   if (studio) {
     // silhouette 3D de voiture, vue sous l'angle ou l'on se trouve, posee sur la voiture detectee
-    const az = rec ? unwrapped : 0, hRef = refH && rec ? refH : h;
+    const az = angleVoiture(), hRef = refH && rec ? refH : h;
     const segs = fil3D(az, pitch);
     let mnx = 1e9, mxx = -1e9, mny = 1e9, mxy = -1e9;
     for (const sg of segs) for (const q of [sg[0], sg[1]]) { mnx = Math.min(mnx, q[0]); mxx = Math.max(mxx, q[0]); mny = Math.min(mny, q[1]); mxy = Math.max(mxy, q[1]); }
@@ -588,6 +588,32 @@ function fil3D(azDeg, pitchDeg) {            // projection perspective depuis la
   const zs = out.map(o => o[2]), z0 = Math.min(...zs), z1 = Math.max(...zs);
   return out.map(([A, B, z]) => [A, B, 1 - (z - z0) / Math.max(1e-6, z1 - z0)]);
 }
+/* angle de vue sur la voiture, recale en continu : le gyroscope donne de combien on a tourne,
+   la forme du cadre (large de profil, etroit de face) dit ou l'on se trouve -> pas besoin de commencer face a l'avant */
+let az0 = 0, formes = [], calAt = 0;
+const ASP = (() => { const t = []; for (let a = 0; a < 360; a++) { const sg = fil3D(a, -8); let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+  for (const [p, q] of sg) for (const v of [p, q]) { x0 = Math.min(x0, v[0]); x1 = Math.max(x1, v[0]); y0 = Math.min(y0, v[1]); y1 = Math.max(y1, v[1]); }
+  t.push(Math.log((x1 - x0) / (y1 - y0))); } return t; })();
+function noterForme(d) {
+  if (!d || !UW || d.x < UW * 0.012 || d.x + d.w > UW * 0.988 || d.y < UH * 0.012 || d.y + d.h > UH * 0.988) return;   // voiture entiere seulement
+  const now = performance.now();
+  if (formes.length && now - formes[formes.length - 1][0] < 150) return;
+  formes.push([now, total, Math.log(d.w / d.h)]); if (formes.length > 240) formes.shift();
+  if (now - calAt < 500) return; calAt = now;
+  const ts = formes.map(f => f[1]); if (Math.max(...ts) - Math.min(...ts) < 25) return;        // il faut avoir tourne un peu
+  // decalage moyen (le detecteur cadre un peu large) puis meilleur angle de depart, a 5 deg pres
+  let best = null;
+  for (let a = 0; a < 360; a += 5) {
+    const ec = formes.map(([, t, l]) => l - ASP[(((Math.round(a + t)) % 360) + 360) % 360]);
+    const m = ec.reduce((x, y) => x + y, 0) / ec.length, e = ec.reduce((x, y) => x + (y - m) ** 2, 0) + 0.5 * m * m * ec.length;
+    if (!best || e < best[1]) best = [a, e];
+  }
+  // avant / arriere se ressemblent : on garde, des deux, le plus proche de l'estimation actuelle
+  const c1 = best[0], c2 = (best[0] + 180) % 360, dist = (x) => Math.abs(((x - az0 + 540) % 360) - 180);
+  az0 = dist(c1) <= dist(c2) ? c1 : c2;
+}
+function angleVoiture() { return az0 + total; }
+
 function carte(W, H) {                        // vue de dessus : voiture, 36 points de photo, vous, prochaine photo
   const R = 38, cx = W > H ? R + 22 : W - R - 22, cy = W > H ? 150 : 64 + 110 + R;
   g.fillStyle = 'rgba(21,50,58,.72)'; g.beginPath(); g.arc(cx, cy, R + 14, 0, 2 * Math.PI); g.fill();
@@ -683,7 +709,7 @@ async function stabilise(list, onFrame) {
 /* ---------- mise a jour automatique ----------
    Safari garde la page en memoire (et plus longtemps depuis l'icone de l'ecran d'accueil) :
    on verifie la version en ligne a l'ouverture et au retour dans l'appli. */
-const VERSION = 14;
+const VERSION = 15;
 async function verifierMaj() {
   try {
     const t = await (await fetch(location.pathname + '?maj=' + Date.now(), { cache: 'no-store' })).text();
