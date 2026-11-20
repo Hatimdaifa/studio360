@@ -156,7 +156,7 @@ video, #overlay { position: absolute; inset: 0; width: 100%; height: 100%; objec
   </ol>
   <button class="primary flow" id="go"><svg class="arr a2" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg><span class="txt">Ouvrir la caméra</span><span class="circle" aria-hidden="true"></span><svg class="arr a1" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
   <p class="err" id="introErr" hidden></p>
-  <p class="note">Rien n'est envoyé sans votre accord : seul le bouton « Créer mon 360 » envoie les photos. · version 16</p>
+  <p class="note">Rien n'est envoyé sans votre accord : seul le bouton « Créer mon 360 » envoie les photos. · version 17</p>
 </section>
 
 <section id="shoot" hidden>
@@ -346,13 +346,14 @@ $('go').onclick = async () => {
    portrait, paysage ou telephone penche : tout est ramene droit, photo et detection.
    Le flux video suit en principe l'ecran ; si l'ecran est verrouille, on le detecte (followsScreen). */
 let followsScreen = true, rot = 0, UW = 0, UH = 0, lastFlipTry = 0;
+let rotFix = 0, essai = 0;                         // quart de tour ajoute si la voiture n'est trouvee que couchee (capteur trompe)
 function screenAngle() { const a = screen.orientation ? screen.orientation.angle : (window.orientation || 0); return ((a % 360) + 360) % 360; }
 function correction(fs) {
-  if (devUp == null) return 0;
+  if (devUp == null) return ((rotFix + 540) % 360) - 180;
   // fs : la video suit l'ecran (cas normal). Sinon (ecran verrouille sur certains telephones) la video
   // est deja droite au quart de tour pres : on ne corrige que l'inclinaison residuelle.
-  let c = fs ? devUp - screenAngle() : devUp - 90 * Math.round(devUp / 90);
-  return ((c + 540) % 360) - 180;                  // degres, sens horaire, -180..180
+  let c = (fs ? devUp - screenAngle() : devUp - 90 * Math.round(devUp / 90)) + rotFix;
+  return ((c % 360) + 540) % 360 - 180;            // degres, sens horaire, -180..180
 }
 function geom(c) {                                 // dimensions de l'image redressee
   const vw = cam.videoWidth, vh = cam.videoHeight, k = ((Math.round(c / 90) % 4) + 4) % 4;
@@ -383,12 +384,33 @@ async function findCar(c) {
     for (let i = 0; i < d.length; i += 4 * 97) { sum += d[i] * .3 + d[i + 1] * .59 + d[i + 2] * .11; n++; }
     lum = sum / n;
   } catch (e) {}
-  const preds = await model.detect(dcv, 6, 0.35);
-  const cars = preds.filter(p => ['car', 'truck', 'bus'].includes(p.class));
+  const cars = await chercher(dcv, w * sc);
   if (!cars.length) return null;
-  cars.sort((a, b) => score(b.bbox, w * sc) - score(a.bbox, w * sc));   // la plus grande et la plus centrale
   const [x, y, bw, bh] = cars[0].bbox;
-  return { c, w, h, box: { x: x / sc, y: y / sc, w: bw / sc, h: bh / sc } };
+  return { c, w, h, score: cars[0].score, box: { x: x / sc, y: y / sc, w: bw / sc, h: bh / sc } };
+}
+// detecteur : image eclaircie si le lieu est sombre (calcul TensorFlow : marche aussi sur iPhone),
+// en portrait d'abord la zone centrale (la voiture y parait plus grande), seuil 0,25
+async function voitures(src, ox, oy) {
+  const gain = lum < 90 ? Math.min(3, 110 / Math.max(lum, 15)) : 1;
+  const t = tf.tidy(() => { const x = tf.browser.fromPixels(src); return gain === 1 ? x : x.toFloat().mul(gain).sub(128).mul(1.12).add(128).clipByValue(0, 255).toInt(); });
+  try { return (await model.detect(t, 6, 0.25)).filter(p => ['car', 'truck', 'bus'].includes(p.class) && (p.score >= 0.35 || p.bbox[2] * p.bbox[3] > 0.04 * src.width * src.height))
+          .map(p => ({ ...p, bbox: [p.bbox[0] + ox, p.bbox[1] + oy, p.bbox[2], p.bbox[3]] })); }
+  finally { t.dispose(); }
+}
+const ccv = document.createElement('canvas');
+async function chercher(cv, vw) {
+  let cars = [];
+  if (cv.height > cv.width * 1.15) {                // portrait : bande centrale presque carree
+    const hh = Math.round(cv.width * 1.15), y0 = Math.round((cv.height - hh) / 2);
+    ccv.width = cv.width; ccv.height = hh; ccv.getContext('2d').drawImage(cv, 0, y0, cv.width, hh, 0, 0, cv.width, hh);
+    cars = await voitures(ccv, 0, y0);
+    // voiture coupee par la bande : on refait sur l'image entiere
+    if (cars.some(p => p.bbox[1] - y0 < 3 || p.bbox[1] + p.bbox[3] > y0 + hh - 3)) cars = [];
+  }
+  if (!cars.length) cars = await voitures(cv, 0, 0);
+  cars.sort((a, b) => score(b.bbox, vw) - score(a.bbox, vw));   // la plus grande et la plus centrale
+  return cars;
 }
 async function detect() {
   if (!model || busy || cam.readyState < 2) return;
@@ -402,6 +424,20 @@ async function detect() {
       lastFlipTry = performance.now();
       const r2 = await findCar(alt);
       if (r2) { followsScreen = !followsScreen; r = r2; }
+    }
+    // toujours rien depuis 0,7 s, ou cadre plus haut que large (voiture vue couchee) : on essaie un autre quart de tour
+    // a chaque passage ; une voiture droite est toujours plus large que haute
+    const couchee = r && r.box.w / r.box.h < 0.75;
+    if ((!r && performance.now() - detAt > 700) || (couchee && performance.now() - lastFlipTry > 400)) {
+      if (couchee) lastFlipTry = performance.now();
+      essai = essai % 3 + 1;
+      let r3 = await findCar(correction(followsScreen) + 90 * essai), q = essai;
+      if (r3 && r3.box.w / r3.box.h >= 0.75) {            // a l'envers, une voiture a aussi la bonne forme : on compare au demi-tour
+        const r4 = await findCar(correction(followsScreen) + 90 * essai + 180);
+        if (r4 && r4.box.w / r4.box.h >= 0.75 && r4.score > r3.score) { r3 = r4; q = essai + 2; }
+      }
+      if (r3 && r3.box.w / r3.box.h >= 0.75) { rotFix = (rotFix + 90 * q) % 360; r = { ...r3, c: correction(followsScreen) }; }
+      else if (!r && r3) r = { ...r3, c: correction(followsScreen) + 90 * essai };   // faute de mieux, sans changer le reglage
     }
     if (r) {
       if (r.w !== UW || r.h !== UH) smooth = null;  // passage portrait <-> paysage : on repart a zero
