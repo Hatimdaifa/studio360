@@ -156,7 +156,7 @@ video, #overlay { position: absolute; inset: 0; width: 100%; height: 100%; objec
   </ol>
   <button class="primary flow" id="go"><svg class="arr a2" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg><span class="txt">Ouvrir la caméra</span><span class="circle" aria-hidden="true"></span><svg class="arr a1" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
   <p class="err" id="introErr" hidden></p>
-  <p class="note">Rien n'est envoyé sans votre accord : seul le bouton « Créer mon 360 » envoie les photos. · version 15</p>
+  <p class="note">Rien n'est envoyé sans votre accord : seul le bouton « Créer mon 360 » envoie les photos. · version 16</p>
 </section>
 
 <section id="shoot" hidden>
@@ -535,12 +535,20 @@ function draw(gd) {
     for (const sg of segs) for (const q of [sg[0], sg[1]]) { mnx = Math.min(mnx, q[0]); mxx = Math.max(mxx, q[0]); mny = Math.min(mny, q[1]); mxy = Math.max(mxy, q[1]); }
     // le dessin epouse la voiture detectee (largeur et hauteur), a la taille de reference si elle est connue
     const k = Math.min(w / (mxx - mnx), hRef / (mxy - mny), h * 1.25 / (mxy - mny)), ox2 = x + w / 2 - (mnx + mxx) / 2 * k, oy2 = y + h - mxy * k;
-    const ok = gd.ok;
-    for (const [p1, p2, prof] of segs) {
-      const al = 0.25 + 0.7 * prof;                                 // traits proches plus visibles que ceux de l'autre cote
-      g.strokeStyle = ok ? `rgba(101,222,241,${al})` : `rgba(249,105,0,${al})`; g.lineWidth = 1 + 1.6 * prof;
-      g.beginPath(); g.moveTo(...P(ox2 + p1[0] * k, oy2 + p1[1] * k)); g.lineTo(...P(ox2 + p2[0] * k, oy2 + p2[1] * k)); g.stroke();
-    }
+    // rendu hologramme : grille au sol puis maillage, deux passes (halo large + trait fin), couleurs additives
+    const T = (q) => P(ox2 + q[0] * k, oy2 + q[1] * k);
+    const rgb = gd.ok ? '101,222,241' : '249,105,0';
+    g.save(); g.globalCompositeOperation = 'lighter';
+    const NB = 5, paquets = (liste, poids) => { const b = Array.from({ length: NB }, () => []);
+      for (const sg of liste) b[Math.min(NB - 1, Math.floor(poids(sg) * NB))].push(sg); return b; };
+    const tracer = (seau) => { g.beginPath(); for (const [p1, p2] of seau) { g.moveTo(...T(p1)); g.lineTo(...T(p2)); } };
+    const sol = paquets(fil3D(az, pitch, SOL), sg => sg[3] * (.35 + .65 * sg[2]));
+    sol.forEach((seau, i) => { if (!seau.length) return; tracer(seau);
+      g.strokeStyle = `rgba(46,107,255,${.08 + .3 * (i + .5) / NB})`; g.lineWidth = 1; g.stroke(); });
+    paquets(segs, sg => sg[2]).forEach((seau, i) => { if (!seau.length) return; const pr = (i + .5) / NB; tracer(seau);
+      g.strokeStyle = `rgba(${rgb},${.05 + .12 * pr})`; g.lineWidth = 4 + 2 * pr; g.stroke();      // halo
+      g.strokeStyle = `rgba(${rgb},${.18 + .7 * pr})`; g.lineWidth = .7 + .8 * pr; g.stroke(); });  // trait
+    g.restore();
   } else {
     g.strokeStyle = col; g.lineWidth = 4;
     g.beginPath();
@@ -561,22 +569,64 @@ function draw(gd) {
 }
 
 /* ---------- silhouette 3D (fil de fer) et carte vue de dessus ---------- */
-const MODELE = (() => {                       // voiture compacte en metres : x vers l'avant, y vers la gauche, z vers le haut
-  const caisse = [[2.15, .32], [2.22, .62], [2.02, .84], [1.0, .97], [-2.02, 1.02], [-2.17, .62], [-2.12, .32]];
-  const vitres = [[.95, .99], [.2, 1.46], [-1.35, 1.44], [-1.95, 1.04]];
-  const S = []; const W = .9, Wv = .76;
-  const boucle = (pts, y, ferme) => { for (let i = 0; i < pts.length - (ferme ? 0 : 1); i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; S.push([[a[0], y, a[1]], [b[0], y, b[1]]]); } };
-  for (const y of [W, -W]) boucle(caisse, y, true);
-  for (const y of [Wv, -Wv]) boucle(vitres, y, false);
-  for (const [x, z] of caisse) S.push([[x, W, z], [x, -W, z]]);              // traverses gauche-droite
-  for (const [x, z] of vitres) S.push([[x, Wv, z], [x, -Wv, z]]);
-  for (const xr of [1.35, -1.35]) for (const y of [W + .02, -W - .02]) {        // roues
-    for (let i = 0; i < 20; i++) { const a = i / 20 * 2 * Math.PI, b = (i + 1) / 20 * 2 * Math.PI;
-      S.push([[xr + .33 * Math.cos(a), y, .33 + .33 * Math.sin(a)], [xr + .33 * Math.cos(b), y, .33 + .33 * Math.sin(b)]]); }
+const MODELE = (() => {                       // voiture compacte en metres, maillage dense facon hologramme : x vers l'avant, y vers la gauche, z vers le haut
+  const it = (T, x) => { if (x <= T[0][0]) return T[0][1]; for (let i = 1; i < T.length; i++) if (x <= T[i][0]) {
+    const [a, va] = T[i - 1], [b, vb] = T[i], t = (x - a) / (b - a), s = t * t * (3 - 2 * t); return va + (vb - va) * s; } return T[T.length - 1][1]; };
+  const BAS = [[-2.17, .44], [-2.02, .31], [2.02, .31], [2.22, .42]];
+  const CEINT = [[-2.17, .72], [-2.02, .93], [-1.4, 1.0], [.6, .97], [1.0, .92], [1.6, .85], [2.08, .74], [2.22, .58]];
+  const TOIT = [[-2.0, .95], [-1.88, 1.28], [-1.55, 1.44], [-.9, 1.48], [.1, 1.47], [.45, 1.36], [.98, .95]];
+  const LARG = [[-2.17, .72], [-1.9, .86], [-1.2, .9], [1.2, .9], [1.9, .84], [2.22, .64]];
+  const RX = [1.36, -1.36], RR = .33;
+  const S = [], NX = 34, anneaux = [];
+  for (let i = 0; i < NX; i++) {
+    const x = -2.17 + 4.39 * i / (NX - 1), zb = it(BAS, x), zc = it(CEINT, x), W = it(LARG, x);
+    const zt = x > -2.0 && x < .98 ? Math.max(zc, it(TOIT, x)) : zc, gv = Math.min(1, Math.max(0, (zt - zc) / .2));
+    const zm = zb + (zc - zb) * .45, Wt = W * (.95 - .25 * gv);
+    const demi = [[W * .8, zb], [W * .96, zb + .07], [W, zm], [W * .985, (zm + zc) / 2], [W * .95, zc],
+      [(W * .95 + Wt) / 2, (zc + zt) / 2], [Wt, zt], [Wt * .66, zt + .025], [Wt * .33, zt + .035], [0, zt + .04]];
+    const ring = demi.map(([y, z]) => [x, y, z]).concat(demi.slice(0, -1).reverse().map(([y, z]) => [x, -y, z]));
+    anneaux.push(ring);
+  }
+  // passages de roue : on n'y trace pas la caisse
+  const dansRoue = p => RX.some(xr => Math.hypot(p[0] - xr, p[2] - RR) < RR + .07) && Math.abs(p[1]) > .55;
+  const seg = (a, b) => { if (!(dansRoue(a) && dansRoue(b))) S.push([a, b]); };
+  for (let i = 0; i < NX; i++) {
+    const r = anneaux[i];
+    for (let k = 0; k < r.length - 1; k++) seg(r[k], r[k + 1]);                          // sections (sans plancher)
+    if (i < NX - 1) for (let k = 0; k < r.length; k++) seg(r[k], anneaux[i + 1][k]);      // lignes dans la longueur
+  }
+  // nez et hayon arrondis : deux anneaux qui se resserrent, puis la face fermee par des lignes horizontales
+  for (const [bout, dx] of [[anneaux[0], -1], [anneaux[NX - 1], 1]]) {
+    const zc = bout.reduce((m, p) => m + p[2], 0) / bout.length; let prec = bout;
+    for (const [d, f] of [[.05, .82], [.08, .58]]) {
+      const r = bout.map(([x, y, z]) => [x + dx * d, y * f, zc + (z - zc) * (.55 + .45 * f)]);
+      for (let k = 0; k < r.length; k++) { seg(prec[k], r[k]); if (k < r.length - 1) seg(r[k], r[k + 1]); }
+      prec = r;
+    }
+    const n = prec.length; for (let k = 0; k < (n - 1) / 2; k++) seg(prec[k], prec[n - 1 - k]);
+  }
+  const cercle = (xr, y, rad, n, a0 = 0, a1 = 2 * Math.PI) => { for (let j = 0; j < n; j++) {
+    const a = a0 + (a1 - a0) * j / n, b = a0 + (a1 - a0) * (j + 1) / n;
+    S.push([[xr + rad * Math.cos(a), y, RR + rad * Math.sin(a)], [xr + rad * Math.cos(b), y, RR + rad * Math.sin(b)]]); } };
+  for (const xr of RX) for (const sg of [1, -1]) {                                           // roues : pneu, jante, rayons, bande de roulement
+    const ye = sg * (it(LARG, xr) + .01), yi = sg * (it(LARG, xr) - .2);
+    cercle(xr, ye, RR, 28); cercle(xr, yi, RR, 28); cercle(xr, ye, RR * .7, 24); cercle(xr, ye, RR * .2, 10);
+    for (let j = 0; j < 12; j++) { const a = j / 12 * 2 * Math.PI, c = Math.cos(a), s = Math.sin(a);
+      S.push([[xr + RR * .2 * c, ye, RR + RR * .2 * s], [xr + RR * .7 * c, ye, RR + RR * .7 * s]]);
+      S.push([[xr + RR * c, ye, RR + RR * s], [xr + RR * c, yi, RR + RR * s]]); }
+    cercle(xr, sg * it(LARG, xr), RR + .07, 14, 0, Math.PI);                                  // arche du passage de roue
   }
   return S;
 })();
-function fil3D(azDeg, pitchDeg) {            // projection perspective depuis la position du photographe
+const SOL = (() => {                         // grille au sol autour de la voiture, plus pale en s'eloignant
+  const S = [], L = 3.6;
+  for (let v = -L; v <= L + 1e-6; v += .45) for (let u = -L; u < L - 1e-6; u += .45) {
+    for (const [a, b] of [[[u, v, 0], [u + .45, v, 0]], [[v, u, 0], [v, u + .45, 0]]]) {
+      const m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], w = 1 - Math.hypot(m[0] / 1.15, m[1] / .85) / 3.3;
+      if (w > 0) S.push([a, b, w]); } }
+  return S;
+})();
+function fil3D(azDeg, pitchDeg, segs = MODELE) {   // projection perspective depuis la position du photographe
   const az = azDeg * Math.PI / 180, D = 6.5, hc = 1.0 + 6.5 * Math.tan(Math.min(25, Math.max(0, -(pitchDeg || -8))) * Math.PI / 180) * .5;
   const c = [D * Math.cos(az), -D * Math.sin(az), hc], t = [0, 0, .7];
   let f = [t[0] - c[0], t[1] - c[1], t[2] - c[2]]; const n = Math.hypot(...f); f = f.map(v => v / n);
@@ -584,9 +634,9 @@ function fil3D(azDeg, pitchDeg) {            // projection perspective depuis la
   const u = [rr[1] * f[2] - rr[2] * f[1], rr[2] * f[0] - rr[0] * f[2], rr[0] * f[1] - rr[1] * f[0]];
   const pr = p => { const v = [p[0] - c[0], p[1] - c[1], p[2] - c[2]]; const zc = v[0] * f[0] + v[1] * f[1] + v[2] * f[2];
     return [(v[0] * rr[0] + v[1] * rr[1]) / zc, -(v[0] * u[0] + v[1] * u[1] + v[2] * u[2]) / zc, zc]; };
-  const out = MODELE.map(([a, b]) => { const A = pr(a), B = pr(b); return [A, B, (A[2] + B[2]) / 2]; });
-  const zs = out.map(o => o[2]), z0 = Math.min(...zs), z1 = Math.max(...zs);
-  return out.map(([A, B, z]) => [A, B, 1 - (z - z0) / Math.max(1e-6, z1 - z0)]);
+  const out = segs.map(([a, b, w]) => { const A = pr(a), B = pr(b); return [A, B, (A[2] + B[2]) / 2, w]; });
+  let z0 = 1e9, z1 = -1e9; for (const o of out) { z0 = Math.min(z0, o[2]); z1 = Math.max(z1, o[2]); }
+  return out.map(([A, B, z, w]) => [A, B, 1 - (z - z0) / Math.max(1e-6, z1 - z0), w]);
 }
 /* angle de vue sur la voiture, recale en continu : le gyroscope donne de combien on a tourne,
    la forme du cadre (large de profil, etroit de face) dit ou l'on se trouve -> pas besoin de commencer face a l'avant */
