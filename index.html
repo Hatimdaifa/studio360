@@ -92,6 +92,13 @@ video, #overlay { position: absolute; inset: 0; width: 100%; height: 100%; objec
 #shutter { position: absolute; inset: 24px; border-radius: 50%; background: var(--hud); box-shadow: 0 0 0 3px var(--pumpkin) inset; display: grid; place-items: center; transition: transform .15s, border-radius .2s, inset .2s, background .2s; }
 #shutter.rec { inset: 42px; border-radius: 12px; background: var(--rec); box-shadow: none; }
 #shutter:active { transform: scale(.94); }
+/* mode studio : le bouton devient le declencheur ; vert et pulse quand c'est le moment */
+#shutter.photo { inset: 16px; border-radius: 50%; background: rgba(255,255,255,.22); box-shadow: 0 0 0 4px rgba(255,255,255,.55) inset; }
+#shutter.photo.moment { background: #fff; box-shadow: 0 0 0 5px #2ECC71 inset; animation: pouls .9s ease-in-out infinite; }
+@keyframes pouls { 0%, 100% { outline: 0 solid rgba(46,204,113,.6); outline-offset: 0; } 50% { outline: 10px solid rgba(46,204,113,0); outline-offset: 2px; } }
+@media (prefers-reduced-motion: reduce) { #shutter.photo.moment { animation: none; } }
+#tip.moment { background: rgba(39,174,96,.94); font-size: 26px; }
+#tip.refus { background: rgba(249,105,0,.92); }
 .side { display: flex; flex-direction: column; gap: 2px; text-shadow: 0 1px 8px rgba(0,0,0,.6); }
 .side.r { align-items: flex-end; text-align: right; }
 .big { font-weight: 800; font-size: 26px; font-variant-numeric: tabular-nums; line-height: 1; }
@@ -145,7 +152,7 @@ video, #overlay { position: absolute; inset: 0; width: 100%; height: 100%; objec
     <text x="105" y="164" text-anchor="middle">environ 3 m · un tour complet</text>
   </svg>
   <div class="modes" role="group" aria-label="Mode de prise de vue">
-    <button id="mStudio" aria-pressed="true">Qualité studio<small>36 arrêts, photos nettes · 2-3 min</small></button>
+    <button id="mStudio" aria-pressed="true">Qualité studio<small>36 arrêts, vous déclenchez au bon moment · 3 min</small></button>
     <button id="mRapide" aria-pressed="false">Tour rapide<small>En marchant · 40 s</small></button>
   </div>
   <ol class="steps">
@@ -156,7 +163,7 @@ video, #overlay { position: absolute; inset: 0; width: 100%; height: 100%; objec
   </ol>
   <button class="primary flow" id="go"><svg class="arr a2" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg><span class="txt">Ouvrir la caméra</span><span class="circle" aria-hidden="true"></span><svg class="arr a1" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
   <p class="err" id="introErr" hidden></p>
-  <p class="note">Rien n'est envoyé sans votre accord : seul le bouton « Créer mon 360 » envoie les photos. · version 17</p>
+  <p class="note">Rien n'est envoyé sans votre accord : seul le bouton « Créer mon 360 » envoie les photos. · version 18</p>
 </section>
 
 <section id="shoot" hidden>
@@ -328,7 +335,7 @@ $('go').onclick = async () => {
   await askSensors();
   try {
     stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 3840 }, height: { ideal: 2160 } }, audio: false });   // la meilleure qualite de la camera
   } catch (e) {
     $('introErr').textContent = location.protocol !== 'https:' && location.hostname !== 'localhost'
       ? "La caméra demande une adresse sécurisée (https). Ouvrez l'appli depuis son lien https."
@@ -477,15 +484,16 @@ function guidance() {
 }
 
 /* ---------- capture d'une photo ---------- */
-const grab = document.createElement('canvas');
+const grabCv = document.createElement('canvas');
 let shotQ = new Array(N).fill(-1);
-function takeShot(i, q = 2) {
+const GMAX = 2400;                                 // taille des photos envoyees (le serveur travaille a 2400 px)
+function takeShot(i, q = 2, src = null) {
   shotQ[i] = q;
   if (pitch0 == null && pitch != null) pitch0 = pitch;
   if (refH == null && det) refH = det.h;
   if (studio) { declic(); flash = performance.now(); }
-  const c = rot, [gw, gh] = geom(c), sc = Math.min(1, 1920 / Math.max(gw, gh));   // meme rotation que la detection
-  drawUpright(grab, c, sc);
+  const c = rot, [gw, gh] = geom(c), sc = Math.min(1, GMAX / Math.max(gw, gh));   // meme rotation que la detection
+  const grab = src || grabCv; if (!src) drawUpright(grab, c, sc);
   const m = { index: i, angle: i * STEP, heading: heading == null ? null : +heading.toFixed(1), t: +((performance.now() - t0) / 1000).toFixed(2),
     q, box: det && q > 0 ? [det.x, det.y, det.w, det.h].map(v => Math.round(v * sc)) : null, video: [grab.width, grab.height], tilt: +c.toFixed(1), pitch: pitch == null ? null : +pitch.toFixed(1), speed: Math.round(speed) };
   if (!(shots[i] instanceof Blob)) shots[i] = 'pending';
@@ -494,11 +502,36 @@ function takeShot(i, q = 2) {
     else if (shots[i] === 'pending') shots[i] = null;
     paintRing();
     if (navigator.vibrate) navigator.vibrate(8);
-  }, 'image/jpeg', 0.9);
+  }, 'image/jpeg', 0.92);
+}
+/* rafale : 3 images en 0,2 s, on garde la plus nette (un leger bouge au moment de l'appui est ecarte) */
+const rafale = [0, 1, 2].map(() => document.createElement('canvas')), petit = document.createElement('canvas');
+function nettete(cv) {
+  const w = 320, h = Math.round(320 * cv.height / cv.width); petit.width = w; petit.height = h;
+  const x = petit.getContext('2d', { willReadFrequently: true }); x.drawImage(cv, 0, 0, w, h);
+  const d = x.getImageData(0, 0, w, h).data, L = new Float32Array(w * h);
+  for (let k = 0; k < w * h; k++) L[k] = d[4 * k] * .3 + d[4 * k + 1] * .59 + d[4 * k + 2] * .11;
+  let s = 0, s2 = 0, n = 0;
+  for (let y = 1; y < h - 1; y += 2) for (let xx = 1; xx < w - 1; xx += 2) {
+    const k = y * w + xx, v = 4 * L[k] - L[k - 1] - L[k + 1] - L[k - w] - L[k + w]; s += v; s2 += v * v; n++; }
+  return s2 / n - (s / n) ** 2;
+}
+let enRafale = false;
+async function photoRafale(i) {
+  if (enRafale) return; enRafale = true;
+  const c = rot, [gw, gh] = geom(c), sc = Math.min(1, GMAX / Math.max(gw, gh));
+  let best = null, bs = -1;
+  for (let k = 0; k < 3; k++) {
+    if (k) await new Promise(r => setTimeout(r, 90));
+    drawUpright(rafale[k], c, sc); const n = nettete(rafale[k]);
+    if (n > bs) { bs = n; best = rafale[k]; }
+  }
+  takeShot(i, 2, best); enRafale = false;
 }
 
 /* ---------- boucle d'affichage ---------- */
 let lastDet = 0, running = false, pretVu = 0, arret = 0, stopTxt = '', flash = 0;
+let moment = false, momentI = -1, pourquoi = '', refusJusqua = 0;
 function loop() {
   running = true;
   const now = performance.now();
@@ -534,13 +567,20 @@ function loop() {
         if (pret) pretVu = now; else if (now - pretVu > 300) still0 = now;   // un raté de detection d'une image ne relance pas l'attente
         const proche = now - pretVu < 300;
         stopTxt = proche ? 'Stop' : '';
-        arret = proche ? Math.min(1, (now - still0) / 450) : 0;            // 0,45 s immobile -> photo
-        if (pret && arret >= 1) takeShot(i, 2);
-        if (!proche && gd.ok && !gd.tip) {                                   // indication de marche vers le prochain repere
-          const reste = cible * STEP - turned;
+        arret = proche ? Math.min(1, (now - still0) / 350) : 0;            // 0,35 s immobile -> c'est le moment
+        moment = pret && arret >= 1; momentI = moment ? i : -1;
+        // pourquoi ce n'est pas le moment (affiche aussi quand on appuie trop tot)
+        const reste = cible * STEP - turned;
+        pourquoi = moment ? '' : !det || now - detAt > 900 ? 'Cadrez la voiture entière' : q < 2 ? (gd.tip || 'Cadrez la voiture') :
+          proche ? 'Ne bougez plus une seconde' : i >= 0 && shotQ[i] === 2 ? 'Déjà prise : avancez au repère suivant' :
+          reste < -4 ? 'Revenez d’un petit pas' : 'Avancez jusqu’au repère';
+        if (now < refusJusqua) setTip('Pas encore', pourquoi, 'refus');
+        else if (moment) setTip('C’est le moment', `Appuyez : photo ${i / 2 + 1}/36`, 'moment');
+        else if (!proche && gd.ok && !gd.tip) {                              // indication de marche vers le prochain repere
           if (cible < N && reste < -4) setTip('↩ Revenez d’un petit pas', `Vous avez dépassé la photo ${cible / 2 + 1}/36 (point blanc sur la carte)`, 'go');
           else if (cible < N) setTip(reste > 6 ? 'Marchez autour de la voiture' : 'Encore un petit pas', `Prochaine photo : ${cible / 2 + 1}/36 · point blanc sur la carte`, 'go');
-        } else if (proche) setTip('STOP', 'Ne bougez plus · photo dans un instant', 'stop');
+        } else if (proche) setTip('Stop', 'Tenez le téléphone immobile', 'stop');
+        $('shutter').classList.toggle('moment', moment);
         paintRing();
       } else if (q > 0 && i >= 0 && i < N && q > shotQ[i]) takeShot(i, q);   // jamais de photo sans voiture reconnue
       $('diag').textContent = `${Math.round(turned)}° · ${hasSensor && !sensorless ? 'gyroscope' : 'chrono 40 s'} · ${model ? (q ? 'voiture vue' : 'pas de voiture') : 'détection absente'}`;
@@ -718,7 +758,12 @@ function carte(W, H) {                        // vue de dessus : voiture, 36 poi
 }
 
 /* ---------- enregistrement ---------- */
-$('shutter').onclick = () => rec ? finish() : start();
+$('shutter').onclick = () => {
+  if (!rec) return start();
+  if (!studio) return finish();
+  if (moment && momentI >= 0) photoRafale(momentI);                    // le bon moment : photo (rafale de 3, la plus nette)
+  else { refusJusqua = performance.now() + 1400; if (navigator.vibrate) navigator.vibrate([30, 40, 30]); }   // trop tot : on dit pourquoi
+};
 $('mStudio').onclick = () => setMode(true); $('mRapide').onclick = () => setMode(false);
 $('stopBtn').onclick = () => finish();
 function start() {
@@ -726,10 +771,11 @@ function start() {
   if (studio && !hasSensor) setMode(false);          // sans gyroscope, impossible de reperer les arrets
   refH = null; still0 = performance.now(); cible = 0; declic();
   rec = true; pitch0 = null; $('diag').hidden = false; unwrapped = 0; t0 = performance.now(); sensorless = !hasSensor;
-  $('shutter').classList.add('rec'); $('shutter').setAttribute('aria-label', 'Arrêter');
+  if (studio) { $('shutter').classList.add('photo'); $('shutter').setAttribute('aria-label', 'Prendre la photo'); }
+  else { $('shutter').classList.add('rec'); $('shutter').setAttribute('aria-label', 'Arrêter'); }
   $('timer').hidden = false; $('stopBtn').hidden = false;
   chunks = []; videoBlob = null;
-  try {
+  if (!studio) try {
     const mime = ['video/mp4', 'video/webm;codecs=vp9', 'video/webm'].find(m => window.MediaRecorder && MediaRecorder.isTypeSupported(m));
     recorder = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 12e6 } : undefined);
     recorder.ondataavailable = e => e.data.size && chunks.push(e.data);
@@ -740,7 +786,7 @@ function start() {
 function finish() {
   if (!rec) return;
   rec = false; tEnd = performance.now();
-  $('shutter').classList.remove('rec'); $('shutter').setAttribute('aria-label', 'Démarrer la prise de vue');
+  $('shutter').classList.remove('rec', 'photo', 'moment'); moment = false; $('shutter').setAttribute('aria-label', 'Démarrer la prise de vue');
   $('timer').hidden = true; $('stopBtn').hidden = true; $('diag').hidden = true;
   try { recorder && recorder.state !== 'inactive' && recorder.stop(); } catch (e) {}
   // on passe tout de suite a l'ecran de fin ; les dernieres photos en cours d'enregistrement suivent
