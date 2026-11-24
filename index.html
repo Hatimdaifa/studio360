@@ -166,7 +166,7 @@ video, #overlay { position: absolute; inset: 0; width: 100%; height: 100%; objec
   </ol>
   <button class="primary flow" id="go"><svg class="arr a2" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg><span class="txt">Ouvrir la caméra</span><span class="circle" aria-hidden="true"></span><svg class="arr a1" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
   <p class="err" id="introErr" hidden></p>
-  <p class="note">Rien n'est envoyé sans votre accord : seul le bouton « Créer mon 360 » envoie les photos. · version 19</p>
+  <p class="note">Rien n'est envoyé sans votre accord : seul le bouton « Créer mon 360 » envoie les photos. · version 20</p>
 </section>
 
 <section id="shoot" hidden>
@@ -349,7 +349,12 @@ $('go').onclick = async () => {
   cam.srcObject = stream; await cam.play();
   $('intro').hidden = true; $('shoot').hidden = false;
   try { await navigator.wakeLock?.request('screen'); } catch (e) {}
-  try { model = await cocoSsd.load({ base: 'lite_mobilenet_v2' }); } catch (e) { setState('bad', 'Détection indisponible'); }
+  // appareil puissant (iPhone, Android haut de gamme, iPad) : detecteur complet, analyse plus frequente ; sinon version legere
+  const ios = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  puissant = ios || (navigator.hardwareConcurrency || 4) >= 8 && (navigator.deviceMemory || 4) >= 6;
+  try { await tf.ready(); if (tf.getBackend() !== 'webgl') puissant = false; } catch (e) {}
+  try { model = await cocoSsd.load({ base: puissant ? 'mobilenet_v2' : 'lite_mobilenet_v2' }); }
+  catch (e) { try { puissant = false; model = await cocoSsd.load({ base: 'lite_mobilenet_v2' }); } catch (e2) { setState('bad', 'Détection indisponible'); } }
   loop();
 };
 
@@ -495,6 +500,8 @@ function takeShot(i, q = 2, src = null) {
   shotQ[i] = q;
   if (pitch0 == null && pitch != null) pitch0 = pitch;
   if (refH == null && det) refH = det.h;
+  bouge = false;
+  if (guide && calib == null && det) calib = Math.log(det.w / det.h) - ASP[(Math.round(i * STEP) % 360 + 360) % 360];
   if (studio) { declic(); flash = performance.now(); }
   const c = rot, [gw, gh] = geom(c), sc = Math.min(1, GMAX / Math.max(gw, gh));   // meme rotation que la detection
   const grab = src || grabCv; if (!src) drawUpright(grab, c, sc);
@@ -536,10 +543,18 @@ async function photoRafale(i) {
 /* ---------- boucle d'affichage ---------- */
 let lastDet = 0, running = false, pretVu = 0, arret = 0, stopTxt = '', flash = 0;
 let moment = false, momentI = -1, pourquoi = '', refusJusqua = 0;
+let puissant = false;
+/* sans gyroscope (beaucoup d'Android, tablettes, capteurs refuses) : comme Spyne / Glo3D, l'appli montre la silhouette
+   de la voiture a l'angle voulu ; on aligne la vraie voiture dessus. La forme de la voiture dit si l'on est au bon angle. */
+let guide = false, calib = null, refus = 0, refusI = -1, mvt = [], bouge = true;
+function ecartForme(az) {                       // > 0 : la voiture parait plus allongee que prevu a cet angle
+  if (!det || calib == null) return 0;
+  return Math.log(det.w / det.h) - (ASP[((Math.round(az) % 360) + 360) % 360] + calib);
+}
 function loop() {
   running = true;
   const now = performance.now();
-  if (now - lastDet > 140) { lastDet = now; detect(); }
+  if (now - lastDet > (puissant ? 100 : 180)) { lastDet = now; detect(); }
   if (det) {
     if (!smooth) smooth = { ...det };
     for (const k of ['x', 'y', 'w', 'h']) smooth[k] += (det[k] - smooth[k]) * 0.35;
@@ -552,7 +567,7 @@ function loop() {
       const el = (now - t0) / 1000;
       $('timerTxt').textContent = `${Math.floor(el / 60)}:${String(Math.floor(el % 60)).padStart(2, '0')}`;
       // angle parcouru : boussole si dispo, sinon le temps (tour de 40 s)
-      const turned = hasSensor && !sensorless ? Math.abs(unwrapped) : el / 40 * 360;
+      const turned = guide ? Math.max(0, cible) * STEP : hasSensor && !sensorless ? Math.abs(unwrapped) : el / 40 * 360;
       let i = Math.floor(turned / STEP);
       if (studio) {                                   // repere le plus proche (tous les 10 deg) : photo seulement a l'arret
         const k = Math.round(turned / 10) * 2, ecart = turned - k * STEP;
@@ -561,13 +576,21 @@ function loop() {
         const r = hist.filter(h => now - h[0] < 260);                  // vitesse sur 0,25 s : l'arret est vu tout de suite
         const vc = r.length > 1 ? Math.abs(r[r.length - 1][1] - r[0][1]) / Math.max(0.1, (r[r.length - 1][0] - r[0][0]) / 1000) : 0;
         if (vc > 5) still0 = now;
+        if (guide) {                                  // sans gyroscope, l'immobilite se lit sur l'image : la voiture ne bouge plus a l'ecran
+          if (smooth) { mvt.push([now, smooth.x + smooth.w / 2, smooth.y + smooth.h / 2, smooth.w]); while (mvt.length > 2 && now - mvt[0][0] > 300) mvt.shift(); }
+          const a = mvt[0], b = mvt[mvt.length - 1];
+          if (!a || Math.hypot(b[1] - a[1], b[2] - a[2]) > 0.02 * b[3] || Math.abs(b[3] / a[3] - 1) > 0.03) { still0 = now; if (a && now - flash > 600) bouge = true; }
+        }
       }
       const entiere = det && det.x > UW * 0.012 && det.x + det.w < UW * 0.988 && det.y > UH * 0.012 && det.y + det.h < UH * 0.988;
       const stable = now - basculeAt > 1000 && detAt > basculeAt + 300 &&
         Math.round(rot / 90) === Math.round(correction(followsScreen) / 90) && Math.abs(rot - correction(followsScreen)) < 8;
       const q = !entiere || !stable ? 0 : gd.ok ? 2 : (det && now - detAt < 900 ? 1 : 0);   // 2 bien cadree, 1 voiture entiere, 0 rien
       if (studio) {
-        const pret = q === 2 && i >= 0 && shotQ[i] < 2;
+        // tolerance = ce que change la forme sur +-5 deg a cet angle (de face ou de profil la forme change peu : on accepte)
+        const pente = ASP[(i * STEP + 3) % 360] - ASP[((i * STEP - 3) % 360 + 360) % 360];   // la voiture s'allonge-t-elle en avancant ?
+        const ef = guide && calib != null && i > 0 ? ecartForme(i * STEP) : 0, aligne = Math.abs(ef) < Math.max(0.05, Math.abs(pente) * 5 / 6) && (bouge || i === 0);
+        const pret = q === 2 && i >= 0 && shotQ[i] < 2 && aligne;
         if (pret) pretVu = now; else if (now - pretVu > 300) still0 = now;   // un raté de detection d'une image ne relance pas l'attente
         const proche = now - pretVu < 300;
         stopTxt = proche ? 'Stop' : '';
@@ -576,10 +599,12 @@ function loop() {
         // pourquoi ce n'est pas le moment (affiche aussi quand on appuie trop tot)
         const reste = cible * STEP - turned;
         pourquoi = moment ? '' : !det || now - detAt > 900 ? 'Cadrez la voiture entière' : q < 2 ? (gd.tip || 'Cadrez la voiture') :
+          guide && !aligne ? !bouge ? 'Avancez jusqu’à la photo suivante' : (ef * pente < 0 ? 'Avancez encore un peu autour de la voiture' : 'Revenez d’un petit pas') + ' : la voiture doit épouser la silhouette' :
           proche ? 'Ne bougez plus une seconde' : i >= 0 && shotQ[i] === 2 ? 'Déjà prise : avancez au repère suivant' :
           reste < -4 ? 'Revenez d’un petit pas' : 'Avancez jusqu’au repère';
         if (now < refusJusqua) setTip('Pas encore', pourquoi, 'refus');
         else if (moment) setTip('C’est le moment', `Appuyez : photo ${i / 2 + 1}/36`, 'moment');
+        else if (guide) setTip(i === 0 && calib == null ? 'Face à l’avant de la voiture' : `Photo ${i / 2 + 1}/36`, pourquoi, 'go');
         else if (!proche && gd.ok && !gd.tip) {                              // indication de marche vers le prochain repere
           if (cible < N && reste < -4) setTip('↩ Revenez d’un petit pas', `Vous avez dépassé la photo ${cible / 2 + 1}/36 (point blanc sur la carte)`, 'go');
           else if (cible < N) setTip(reste > 6 ? 'Marchez autour de la voiture' : 'Encore un petit pas', `Prochaine photo : ${cible / 2 + 1}/36 · point blanc sur la carte`, 'go');
@@ -587,7 +612,7 @@ function loop() {
         $('shutter').classList.toggle('moment', moment);
         paintRing();
       } else if (q > 0 && i >= 0 && i < N && q > shotQ[i]) takeShot(i, q);   // jamais de photo sans voiture reconnue
-      $('diag').textContent = `${Math.round(turned)}° · ${hasSensor && !sensorless ? 'gyroscope' : 'chrono 40 s'} · ${model ? (q ? 'voiture vue' : 'pas de voiture') : 'détection absente'}`;
+      $('diag').textContent = `${Math.round(turned)}° · ${guide ? 'silhouette' : hasSensor && !sensorless ? 'gyroscope' : 'chrono 40 s'}${puissant ? ' · détection complète' : ''} · ${model ? (q ? 'voiture vue' : 'pas de voiture') : 'détection absente'}`;
       if (studio ? shotQ.every((v, j) => j % 2 || v === 2) || turned >= 370 : turned >= 360 + STEP / 2 || shotQ.every(v => v === 2)) finish();
     }
   }
@@ -609,7 +634,7 @@ function draw(gd) {
   g.lineCap = 'round'; g.lineJoin = 'round';
   if (studio) {
     // silhouette 3D de voiture, vue sous l'angle ou l'on se trouve, posee sur la voiture detectee
-    const az = angleVoiture(), hRef = refH && rec ? refH : h;
+    const az = guide && rec ? Math.max(0, cible) * STEP : angleVoiture(), hRef = refH && rec ? refH : h;
     const segs = fil3D(az, pitch);
     let mnx = 1e9, mxx = -1e9, mny = 1e9, mxy = -1e9;
     for (const sg of segs) for (const q of [sg[0], sg[1]]) { mnx = Math.min(mnx, q[0]); mxx = Math.max(mxx, q[0]); mny = Math.min(mny, q[1]); mxy = Math.max(mxy, q[1]); }
@@ -755,7 +780,7 @@ function carte(W, H) {                        // vue de dessus : voiture, 36 poi
     g.fillStyle = shotQ[j] >= 2 ? '#65DEF1' : j === cible ? '#fff' : 'rgba(255,255,255,.25)';
     g.beginPath(); g.arc(px, py, j === cible ? 4.5 : 2.4, 0, 2 * Math.PI); g.fill();
   }
-  const [mx, my] = pt(unwrapped);
+  const [mx, my] = pt(guide ? Math.max(0, cible) * STEP : unwrapped);
   g.fillStyle = '#F96900'; g.strokeStyle = '#fff'; g.lineWidth = 2;
   g.beginPath(); g.arc(mx, my, 6, 0, 2 * Math.PI); g.fill(); g.stroke();
   g.fillStyle = '#fff'; g.font = '600 11px Poppins, sans-serif'; g.textAlign = 'center'; g.fillText('vous', mx, my - 10); g.textAlign = 'start';
@@ -766,13 +791,14 @@ $('shutter').onclick = () => {
   if (!rec) return start();
   if (!studio) return finish();
   if (moment && momentI >= 0) photoRafale(momentI);                    // le bon moment : photo (rafale de 3, la plus nette)
-  else { refusJusqua = performance.now() + 1400; if (navigator.vibrate) navigator.vibrate([30, 40, 30]); }   // trop tot : on dit pourquoi
+  else if (studio && guide && det && performance.now() - detAt < 900 && refusI === cible && ++refus >= 2) photoRafale(cible);   // detection hesitante : 3e appui = photo quand meme
+  else { if (refusI !== cible) { refusI = cible; refus = 0; } refusJusqua = performance.now() + 1400; if (navigator.vibrate) navigator.vibrate([30, 40, 30]); }   // trop tot : on dit pourquoi
 };
 $('mStudio').onclick = () => setMode(true); $('mRapide').onclick = () => setMode(false);
 $('stopBtn').onclick = () => finish();
 function start() {
   shots = new Array(N).fill(null); shotQ = new Array(N).fill(-1); meta = []; paintRing();
-  if (studio && !hasSensor) setMode(false);          // sans gyroscope, impossible de reperer les arrets
+  guide = studio && !hasSensor; calib = null; refus = 0; mvt = [];   // sans gyroscope : alignement sur la silhouette
   refH = null; still0 = performance.now(); cible = 0; declic();
   rec = true; pitch0 = null; $('diag').hidden = false; unwrapped = 0; t0 = performance.now(); sensorless = !hasSensor;
   if (studio) { $('shutter').classList.add('photo'); $('shutter').setAttribute('aria-label', 'Prendre la photo'); }
